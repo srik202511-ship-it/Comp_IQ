@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Save, Loader2, RotateCcw } from "lucide-react";
+import { Save, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { useData } from "../context/DataContext";
 import { PageHeader, Card, SectionTitle } from "../components/common";
@@ -12,6 +12,7 @@ export default function Settings() {
   const { company, refresh } = useData();
   const [f, setF] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
@@ -42,6 +43,19 @@ export default function Settings() {
     finally { setSaving(false); }
   };
 
+  const analyzeWebsite = async () => {
+    if (!f.website?.trim()) { toast.error("Enter your product website first"); return; }
+    setAnalyzing(true);
+    const t = toast.loading("Crawling your website & building your product profile with GPT-5.4…");
+    try {
+      await api.post("/company/analyze", { website: f.website.trim() });
+      await refresh();
+      toast.success("Your product profile is ready — demo data cleared. Add your real competitors next.", { id: t });
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail), { id: t });
+    } finally { setAnalyzing(false); }
+  };
+
   const resetDemo = async () => {
     setResetting(true);
     try {
@@ -58,7 +72,15 @@ export default function Settings() {
 
       <form onSubmit={save} className="space-y-6">
         <Card className="p-6">
-          <SectionTitle eyebrow="Company" title="Company Profile" />
+          <SectionTitle eyebrow="Company" title="Company Profile" action={
+            <button type="button" onClick={analyzeWebsite} disabled={analyzing} data-testid="analyze-my-website-btn"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+              {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Analyze My Website
+            </button>
+          } />
+          <p className="text-slate-400 text-xs -mt-2 mb-4">
+            Enter your product website below and let AI auto-fill this profile from your real site. This replaces the demo data with your own product.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Inp label="Company name" value={f.company_name} onChange={set("company_name")} testid="set-company-name" />
             <Inp label="Industry" value={f.industry} onChange={set("industry")} testid="set-industry" />

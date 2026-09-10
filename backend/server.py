@@ -213,6 +213,40 @@ Return JSON with EXACTLY this shape:
 Set pricing.available=false and starting_price='Not publicly available' if pricing is not in the text. Scores are AI-derived estimates."""
 
 
+COMPANY_SYSTEM = (
+    "You are a competitive-intelligence analyst. Extract structured facts about a company's OWN product ONLY from the provided website text. "
+    "NEVER fabricate. If a value is not present, use 'Not publicly available'. Respond with valid minified JSON only, no markdown."
+)
+
+
+def company_prompt(website: str, scraped: dict) -> str:
+    return f"""Analyze THIS company's own website to build their product profile for a competitive dashboard.
+
+WEBSITE: {website}
+SCRAPED TEXT (source of truth):
+\"\"\"{scraped.get('text', '')[:8000]}\"\"\"
+
+Return JSON EXACTLY:
+{{
+ "company_name": "",
+ "industry": "",
+ "description": "1-2 sentences",
+ "product_name": "",
+ "category": "",
+ "product_description": "1-2 sentences",
+ "target_customers": "",
+ "value_proposition": "",
+ "differentiators": ["up to 3"],
+ "use_cases": ["up to 3"],
+ "features": ["key product features"],
+ "pricing": "starting price or 'Not publicly available'",
+ "competitive_goals": "inferred competitive goal",
+ "scores": {{"overall": 0-100, "price_competitiveness": 0-10, "feature_strength": 0-100, "value_prop": 0-10, "market_position": 1-10, "innovation": 0-10}}
+}}
+Scores are AI-derived baseline estimates for this product."""
+
+
+
 INSIGHTS_SYSTEM = (
     "You are a senior competitive strategy advisor. You reason ONLY from the provided competitor data. "
     "Every insight must cite specific evidence from the data (features, prices, scores). "
@@ -324,11 +358,40 @@ async def get_company(user: dict = Depends(get_current_user)):
 async def update_company(body: CompanyBody, user: dict = Depends(get_current_user)):
     existing = await db.company.find_one({"user_id": user["id"]})
     data = body.model_dump()
+    data["is_demo"] = False
     if existing:
         await db.company.update_one({"user_id": user["id"]}, {"$set": data})
     else:
         data.update({"id": str(uuid.uuid4()), "user_id": user["id"], "scores": demo_data.demo_company_scores()})
         await db.company.insert_one(data)
+    return clean(await db.company.find_one({"user_id": user["id"]}))
+
+
+class CompanyAnalyzeBody(BaseModel):
+    website: str
+
+
+@api_router.post("/company/analyze")
+async def analyze_company(body: CompanyAnalyzeBody, user: dict = Depends(get_current_user)):
+    scraped = scrape_website(body.website)
+    if not scraped["ok"]:
+        raise HTTPException(status_code=422, detail=f"Could not retrieve website data for {body.website}. Please check the URL and retry.")
+    try:
+        profile = await ai_json(COMPANY_SYSTEM, company_prompt(body.website, scraped))
+    except Exception as e:
+        logger.error(f"company analyze AI error: {e}")
+        raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
+    profile["website"] = body.website if body.website.startswith("http") else "https://" + body.website
+    profile["is_demo"] = False
+    existing = await db.company.find_one({"user_id": user["id"]})
+    if existing:
+        await db.company.update_one({"user_id": user["id"]}, {"$set": profile})
+    else:
+        profile.update({"id": str(uuid.uuid4()), "user_id": user["id"]})
+        await db.company.insert_one(profile)
+    # Clear demo dataset so the user only sees their own product going forward
+    await db.competitors.delete_many({"user_id": user["id"], "is_demo": True})
+    await db.insights.delete_many({"user_id": user["id"], "is_demo": True})
     return clean(await db.company.find_one({"user_id": user["id"]}))
 
 
