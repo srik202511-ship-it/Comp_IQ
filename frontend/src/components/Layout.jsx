@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { NavLink, Outlet } from "react-router-dom";
+import { useState } from "react";
 import {
   LayoutDashboard, Building2, GitCompare, Lightbulb, Grid2X2, Settings,
   LogOut, Radar as RadarIcon, Menu, X, Sparkles,
@@ -19,15 +19,9 @@ const NAV = [
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { company, competitors } = useData();
+  const { company, competitors, onboardingOpen, setOnboardingOpen, openOnboarding } = useData();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const loc = useLocation();
   const analyzed = competitors.filter((c) => c.status === "Analyzed").length;
-
-  useEffect(() => {
-    if (company?.is_demo && localStorage.getItem("ciq_onb_done") !== "1") setShowOnboarding(true);
-  }, [company]);
 
   const Sidebar = (
     <div className="flex flex-col h-full justify-between p-4">
@@ -112,7 +106,7 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-3">
             {company?.is_demo && (
-              <button onClick={() => setShowOnboarding(true)} data-testid="open-setup-guide"
+              <button onClick={openOnboarding} data-testid="open-setup-guide"
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300 text-[11px] font-medium hover:bg-blue-500/20 transition-colors">
                 <Sparkles className="w-3 h-3" /> Setup Guide
               </button>
@@ -130,7 +124,7 @@ export default function Layout() {
         </main>
       </div>
 
-      {showOnboarding && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      {onboardingOpen && <Onboarding onClose={() => setOnboardingOpen(false)} />}
     </div>
   );
 }

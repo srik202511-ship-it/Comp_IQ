@@ -9,6 +9,7 @@ export function DataProvider({ children }) {
   const [competitors, setCompetitors] = useState([]);
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const [c, comps, ins] = await Promise.all([
@@ -24,8 +25,17 @@ export function DataProvider({ children }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  useEffect(() => {
+    if (company?.is_demo && localStorage.getItem("ciq_onb_done") !== "1") setOnboardingOpen(true);
+  }, [company]);
+
+  const openOnboarding = useCallback(() => {
+    localStorage.removeItem("ciq_onb_done");
+    setOnboardingOpen(true);
+  }, []);
+
   return (
-    <DataContext.Provider value={{ company, competitors, insights, loading, refresh, setCompany, setCompetitors, setInsights }}>
+    <DataContext.Provider value={{ company, competitors, insights, loading, refresh, setCompany, setCompetitors, setInsights, onboardingOpen, setOnboardingOpen, openOnboarding }}>
       {children}
     </DataContext.Provider>
   );

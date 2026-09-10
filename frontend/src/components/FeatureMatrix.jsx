@@ -10,7 +10,7 @@ function Cell({ v }) {
 
 export default function FeatureMatrix({ matrix, ourName = "Our Product" }) {
   const [cat, setCat] = useState("All");
-  const features = matrix?.features || [];
+  const features = useMemo(() => matrix?.features || [], [matrix]);
   const scores = matrix?.feature_scores || {};
   const companies = Object.keys(scores);
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Save, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { Save, Loader2, RotateCcw, Sparkles, Compass } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { useData } from "../context/DataContext";
 import { PageHeader, Card, SectionTitle } from "../components/common";
@@ -9,7 +9,7 @@ const toList = (s) => s.split(",").map((x) => x.trim()).filter(Boolean);
 const toStr = (a) => (Array.isArray(a) ? a.join(", ") : a || "");
 
 export default function Settings() {
-  const { company, refresh } = useData();
+  const { company, refresh, openOnboarding } = useData();
   const [f, setF] = useState(null);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -113,6 +113,19 @@ export default function Settings() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Profile
         </button>
       </form>
+
+      <Card className="p-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h4 className="font-heading font-semibold text-slate-100">Setup guide</h4>
+            <p className="text-slate-400 text-sm mt-0.5">Relaunch the guided walkthrough to analyze your website and add competitors step by step.</p>
+          </div>
+          <button onClick={openOnboarding} data-testid="run-setup-guide-btn"
+            className="inline-flex items-center gap-2 border border-blue-500/40 text-blue-300 hover:bg-blue-500/10 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+            <Compass className="w-4 h-4" /> Run Setup Guide
+          </button>
+        </div>
+      </Card>
 
       <Card className="p-6 border-amber-500/20">
         <div className="flex items-center justify-between gap-4 flex-wrap">

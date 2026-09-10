@@ -113,7 +113,11 @@ export default function Onboarding({ onClose }) {
               </p>
               <div className="mt-5 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
                 <div className="text-amber-300 text-xs font-mono uppercase tracking-wider mb-1">Heads up</div>
-                <p className="text-slate-300 text-sm">You're currently viewing <b>demo data</b>. Setting up your own product will replace it with your real analysis.</p>
+                <p className="text-slate-300 text-sm">
+                  {company?.is_demo
+                    ? "You're currently viewing demo data. Setting up your own product will replace it with your real analysis."
+                    : "Analyzing a new website will update your product profile and rebuild your competitive analysis."}
+                </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 <button onClick={() => setStep(1)} data-testid="onboarding-start" className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
