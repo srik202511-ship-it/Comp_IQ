@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, Loader2, Sparkles } from "lucide-react";
+import { RefreshCw, Loader2, Sparkles, FileDown } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
+import { exportDashboardPdf } from "../lib/exportPdf";
 import { useData } from "../context/DataContext";
 import { PageHeader, SectionTitle, Card } from "../components/common";
 import ScoreCards from "../components/ScoreCards";
@@ -31,6 +32,16 @@ export default function Dashboard() {
     }
   };
 
+  const exportPdf = () => {
+    if (!insights) return;
+    try {
+      exportDashboardPdf({ company, insights });
+      toast.success("Executive PDF report downloaded");
+    } catch (e) {
+      toast.error("Could not generate PDF");
+    }
+  };
+
   if (loading) return <LoadingBlock />;
 
   const analyzed = competitors.filter((c) => c.status === "Analyzed").length;
@@ -41,11 +52,17 @@ export default function Dashboard() {
         title="AI Competitor Intelligence"
         subtitle="Understand where you win, where competitors lead, and where to act next."
         right={
-          <button onClick={regenerate} disabled={busy} data-testid="regenerate-insights-btn"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Regenerate Insights
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button onClick={exportPdf} disabled={!insights} data-testid="export-pdf-btn"
+              className="inline-flex items-center gap-2 border border-[#374151] hover:border-blue-500/50 hover:text-blue-300 text-slate-300 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50">
+              <FileDown className="w-4 h-4" /> Export PDF
+            </button>
+            <button onClick={regenerate} disabled={busy} data-testid="regenerate-insights-btn"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Regenerate Insights
+            </button>
+          </div>
         }
       />
 
