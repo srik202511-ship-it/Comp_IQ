@@ -1,0 +1,155 @@
+{
+  "app_metadata": {
+    "name": "AI Competitor & Product Analysis Dashboard",
+    "type": "saas_app",
+    "theme_mode": "dark_default_with_toggle",
+    "archetype": "ARCHETYPE_4_SWISS_HIGH_CONTRAST_PERFORMANCE_TACTICAL"
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Cabinet Grotesk, Outfit, sans-serif",
+      "body": "Inter, DM Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-normal",
+      "h4": "text-lg font-semibold",
+      "body": "text-sm sm:text-base leading-relaxed text-slate-300",
+      "caption": "text-xs font-mono uppercase tracking-widest text-slate-400"
+    }
+  },
+  "colors": {
+    "theme": {
+      "background_primary": "#0B0F17",
+      "background_secondary": "#111827",
+      "surface_card": "#1F2937",
+      "surface_card_hover": "#374151",
+      "border_subtle": "#1F2937",
+      "border_bold": "#374151",
+      "text_primary": "#F9FAFB",
+      "text_secondary": "#9CA3AF",
+      "text_muted": "#6B7280"
+    },
+    "accents": {
+      "primary": "#3B82F6",
+      "primary_hover": "#2563EB",
+      "cyan_highlight": "#06B6D4",
+      "emerald_confirmed": "#10B981",
+      "amber_inferred": "#F59E0B",
+      "rose_not_public": "#EF4444",
+      "indigo_ai": "#6366F1"
+    },
+    "swot_quadrants": {
+      "strengths": {
+        "bg": "bg-emerald-950/30",
+        "border": "border-emerald-800/40",
+        "text": "text-emerald-400",
+        "badge": "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+      },
+      "weaknesses": {
+        "bg": "bg-rose-950/30",
+        "border": "border-rose-800/40",
+        "text": "text-rose-400",
+        "badge": "bg-rose-500/10 text-rose-300 border-rose-500/20"
+      },
+      "opportunities": {
+        "bg": "bg-blue-950/30",
+        "border": "border-blue-800/40",
+        "text": "text-blue-400",
+        "badge": "bg-blue-500/10 text-blue-300 border-blue-500/20"
+      },
+      "threats": {
+        "bg": "bg-amber-950/30",
+        "border": "border-amber-800/40",
+        "text": "text-amber-400",
+        "badge": "bg-amber-500/10 text-amber-300 border-amber-500/20"
+      }
+    }
+  },
+  "layout_and_navigation": {
+    "sidebar": {
+      "width": "w-64",
+      "style": "fixed top-0 left-0 h-screen bg-[#0B0F17] border-r border-slate-800/80 z-40 flex flex-col justify-between p-4",
+      "nav_items": [
+        {"id": "dashboard", "label": "Dashboard", "icon": "LayoutDashboard"},
+        {"id": "competitors", "label": "Competitors", "icon": "Building2"},
+        {"id": "compare", "label": "Compare", "icon": "GitCompare"},
+        {"id": "insights", "label": "AI Insights", "icon": "Lightbulb"},
+        {"id": "swot", "label": "SWOT Matrix", "icon": "Grid2X2"},
+        {"id": "settings", "label": "Settings", "icon": "Settings"}
+      ]
+    },
+    "top_header": {
+      "style": "h-16 bg-[#0B0F17]/80 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-30 flex items-center justify-between px-6",
+      "elements": ["Industry Sector Preset Switcher (EV / SaaS / Consumer Electronics)", "Live Web Scraper & AI Trigger", "User Profile & Demo Mode Pill"]
+    }
+  },
+  "score_cards": [
+    {"key": "overall_score", "title": "Overall Competitive Score", "unit": "/100", "icon": "Trophy"},
+    {"key": "price_competitiveness", "title": "Price Competitiveness", "unit": "/10", "icon": "DollarSign"},
+    {"key": "feature_strength", "title": "Feature Strength", "unit": "%", "icon": "CheckCircle2"},
+    {"key": "value_prop", "title": "Value Proposition", "unit": "/10", "icon": "Sparkles"},
+    {"key": "market_position", "title": "Market Position", "unit": "Rank", "icon": "BarChart3"},
+    {"key": "innovation_score", "title": "Innovation Score", "unit": "/10", "icon": "Zap"}
+  ],
+  "charts_and_visualization": {
+    "radar_chart": {
+      "library": "recharts",
+      "dimensions": ["Pricing", "Features", "Brand Power", "Innovation", "Customer Support", "Market Velocity"]
+    },
+    "positioning_2_axis_map": {
+      "x_axis": "Price Point (Budget → Premium)",
+      "y_axis": "Capability & Feature Density (Basic → Enterprise/Advanced)",
+      "interactive": "Hover for competitor preview tooltip, click to filter detailed comparison"
+    },
+    "feature_matrix": {
+      "status_symbols": {
+        "supported": "✓ (Green check)",
+        "not_supported": "✕ (Red cross)",
+        "partial": "— (Amber dash)"
+      }
+    }
+  },
+  "data_reliability_badges": {
+    "Confirmed": {
+      "label": "Confirmed",
+      "color": "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+      "tooltip": "Scraped directly from public site or official documentation"
+    },
+    "AI-inferred": {
+      "label": "AI-inferred",
+      "color": "bg-amber-500/10 text-amber-400 border-amber-500/30",
+      "tooltip": "Synthesized by GPT-5.4 from market signals and positioning analysis"
+    },
+    "Not publicly available": {
+      "label": "Not Publicly Available",
+      "color": "bg-slate-800 text-slate-400 border-slate-700",
+      "tooltip": "Requires enterprise contact or NDA"
+    }
+  },
+  "image_urls": {
+    "avatars_and_logos": [
+      "https://images.unsplash.com/photo-1620287341056-49a2f1ab2fdc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHx0ZWNoJTIwY29tcGFueSUyMGxvZ29zJTIwU2FhUyUyMHByb2R1Y3QlMjBkYXNoYm9hcmQlMjBhdmF0YXJzfGVufDB8fHx8MTc4OTA1MDA4MXww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1655196601100-8bfb26cf99e9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHx0ZWNoJTIwY29tcGFueSUyMGxvZ29zJTIwU2FhUyUyMHByb2R1Y3QlMjBkYXNoYm9hcmQlMjBhdmF0YXJzfGVufDB8fHx8MTc4OTA1MDA4MXww&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "You MUST build all views with .jsx / .js React standard inside src/components/ or src/views/.",
+    "Implement clean tabbed or route-based navigation driven by state or react-router.",
+    "Include pre-loaded rich demo datasets for 3 verticals: EV (Tesla, Rivian, Lucid), SaaS (Datadog, Dynatrace, New Relic), Consumer Electronics (Apple, Sony, Bose).",
+    "Ensure every single interactive element has a data-testid attribute in kebab-case format.",
+    "Do NOT rely on full transparent backgrounds for dropdowns, popovers, or modals. Use backdrop blur with dark slate background fill.",
+    "Render the 2-axis positioning map cleanly using Recharts ScatterChart or custom Interactive SVG Canvas.",
+    "Provide a working AI analysis simulation with progress indicators (Website Crawling -> Extracting Pricing -> GPT-5.4 Feature Mapping -> SWOT Synthesis -> Score Calculation).",
+    "Toast notifications MUST use Sonner (`toast.success`, `toast.error`, `toast.info`)."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Dark colors look best when layered with solid slate surfaces (#1F2937, #111827) and crisp 1px borders (#374151). Avoid heavy gradients.",
+    "Never center-align the whole dashboard page container.",
+    "Use micro-animations on interactive badges, action toggles (P0/P1/P2), and chart hover states.",
+    "Ensure generous padding (p-6, p-8) inside card containers to prevent text collisions.",
+    "Maintain strict APCA/WCAG readability: text-slate-100 for titles, text-slate-300 for body, text-slate-400 for subtext."
+  ]
+}
