@@ -13,6 +13,7 @@ import SwotGrid from "../components/SwotGrid";
 import InsightsSection from "../components/InsightsSection";
 import RecommendedActions from "../components/RecommendedActions";
 import { RadarComparison, PositioningMap } from "../components/Charts";
+import { personalizeInsights, getOurName } from "../lib/personalize";
 
 export default function Dashboard() {
   const { company, competitors, insights, loading, setInsights } = useData();
@@ -35,7 +36,8 @@ export default function Dashboard() {
   const exportPdf = () => {
     if (!insights) return;
     try {
-      exportDashboardPdf({ company, insights });
+      const ourName = getOurName(company);
+      exportDashboardPdf({ company, insights: personalizeInsights(insights, ourName) });
       toast.success("Executive PDF report downloaded");
     } catch (e) {
       toast.error("Could not generate PDF");
@@ -45,6 +47,8 @@ export default function Dashboard() {
   if (loading) return <LoadingBlock />;
 
   const analyzed = competitors.filter((c) => c.status === "Analyzed").length;
+  const ourName = getOurName(company);
+  const view = personalizeInsights(insights, ourName);
 
   return (
     <div className="space-y-8">
@@ -71,16 +75,16 @@ export default function Dashboard() {
       ) : (
         <>
           <ScoreCards scores={company?.scores} />
-          <ExecutiveSummary summary={insights.executive_summary} />
+          <ExecutiveSummary summary={view.executive_summary} />
 
           <section>
             <SectionTitle eyebrow="Pricing" title="Pricing Comparison" />
-            <PricingSection pricing={insights.pricing_comparison} />
+            <PricingSection pricing={view.pricing_comparison} />
           </section>
 
           <section>
             <SectionTitle eyebrow="Capabilities" title="Feature Comparison" />
-            <FeatureMatrix matrix={insights.feature_matrix} />
+            <FeatureMatrix matrix={view.feature_matrix} ourName={ourName} />
           </section>
 
           <section>
@@ -88,24 +92,24 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <Card className="p-6">
                 <h4 className="font-heading font-semibold text-slate-100 mb-2">Multi-Dimension Radar</h4>
-                <RadarComparison radar={insights.radar} />
+                <RadarComparison radar={view.radar} />
               </Card>
               <Card className="p-6">
                 <h4 className="font-heading font-semibold text-slate-100 mb-2">Positioning Map</h4>
                 <p className="text-slate-500 text-xs mb-2">Price competitiveness vs feature strength</p>
-                <PositioningMap points={insights.positioning} />
+                <PositioningMap points={view.positioning} />
               </Card>
             </div>
           </section>
 
           <section>
             <SectionTitle eyebrow="Analysis" title="SWOT Overview" />
-            <SwotGrid swot={insights.swot} />
+            <SwotGrid swot={view.swot} />
           </section>
 
           <section>
             <SectionTitle eyebrow="Recommendations" title="AI Competitive Insights" />
-            <InsightsSection insights={insights.insights} />
+            <InsightsSection insights={view.insights} />
           </section>
 
           <RecommendedActions actions={insights.recommended_actions} onChange={(a) => setInsights({ ...insights, recommended_actions: a })} />

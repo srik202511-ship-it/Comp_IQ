@@ -4,9 +4,10 @@ import FeatureMatrix from "../components/FeatureMatrix";
 import ComparisonTable from "../components/ComparisonTable";
 import PricingSection from "../components/PricingSection";
 import { ValueBarChart, PositioningMap } from "../components/Charts";
+import { personalizeInsights, getOurName } from "../lib/personalize";
 
 export default function Compare() {
-  const { insights } = useData();
+  const { insights, company } = useData();
 
   if (!insights)
     return (
@@ -16,7 +17,9 @@ export default function Compare() {
       </div>
     );
 
-  const table = insights.comparison_table || [];
+  const ourName = getOurName(company);
+  const view = personalizeInsights(insights, ourName);
+  const table = view.comparison_table || [];
   const overallData = table.map((r) => ({ company: r.company, value: r.overall, is_ours: r.is_ours }));
   const featureData = table.map((r) => ({ company: r.company, value: r.feature_score, is_ours: r.is_ours }));
 
@@ -39,17 +42,17 @@ export default function Compare() {
 
       <section>
         <SectionTitle eyebrow="Capabilities" title="Feature Matrix" />
-        <FeatureMatrix matrix={insights.feature_matrix} />
+        <FeatureMatrix matrix={view.feature_matrix} ourName={ourName} />
       </section>
 
       <section>
         <SectionTitle eyebrow="Pricing" title="Pricing Comparison" />
-        <PricingSection pricing={insights.pricing_comparison} />
+        <PricingSection pricing={view.pricing_comparison} />
       </section>
 
       <section>
         <SectionTitle eyebrow="Positioning" title="Competitive Map" />
-        <Card className="p-6"><PositioningMap points={insights.positioning} /></Card>
+        <Card className="p-6"><PositioningMap points={view.positioning} /></Card>
       </section>
     </div>
   );

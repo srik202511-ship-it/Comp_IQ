@@ -8,7 +8,7 @@ function Cell({ v }) {
   return <Minus className="w-4 h-4 text-amber-400 mx-auto" />;
 }
 
-export default function FeatureMatrix({ matrix }) {
+export default function FeatureMatrix({ matrix, ourName = "Our Product" }) {
   const [cat, setCat] = useState("All");
   const features = matrix?.features || [];
   const scores = matrix?.feature_scores || {};
@@ -50,7 +50,7 @@ export default function FeatureMatrix({ matrix }) {
             <tr className="border-b border-[#374151]">
               <th className="text-left py-3 pr-4 text-slate-400 font-mono text-[11px] uppercase tracking-wider">Feature</th>
               {companies.map((c) => (
-                <th key={c} className={`py-3 px-2 text-center text-xs font-semibold ${c === "Our Product" ? "text-blue-300" : "text-slate-300"}`}>{c}</th>
+                <th key={c} className={`py-3 px-2 text-center text-xs font-semibold ${c === ourName ? "text-blue-300" : "text-slate-300"}`}>{c}</th>
               ))}
             </tr>
           </thead>
@@ -67,7 +67,7 @@ export default function FeatureMatrix({ matrix }) {
               <td className="py-3 pr-4 text-slate-400 font-mono text-[11px] uppercase tracking-wider">Feature Score</td>
               {companies.map((c) => (
                 <td key={c} className="py-3 px-2 text-center">
-                  <span className={`font-heading font-bold ${c === "Our Product" ? "text-blue-300" : "text-slate-200"}`}>{scores[c]}</span>
+                  <span className={`font-heading font-bold ${c === ourName ? "text-blue-300" : "text-slate-200"}`}>{scores[c]}</span>
                   <span className="text-slate-500 text-xs">/100</span>
                 </td>
               ))}

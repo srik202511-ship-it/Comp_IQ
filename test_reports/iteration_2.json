@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only E2E testing of CompeteIQ onboarding wizard on demo account (demo@competeiq.ai). All 9 test scenarios passed end-to-end including auto-appearance for demo user, welcome step buttons (Set up my product, Explore the demo first, Skip), dismiss persistence via localStorage ciq_onb_done, Setup Guide reopen from header, full three AI steps (product analyze on linear.app -> competitor step; adding Jira competitor with analyze -> insights step; generate insights -> wizard closes and dashboard populated with real 'Linear' company data). Demo Data badge disappears after product analyze as expected. No runtime pageerrors or console errors during the flow. Demo dataset restored via POST /api/reset-demo at the end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Onboarding.jsx useEffect trigger relies solely on company.is_demo flag; if a partial failure leaves is_demo=false without insights, user cannot re-open wizard via header (Setup Guide only shows when is_demo=true). Consider a Settings entry point for re-onboarding.",
+    "Onboarding buttons do not disable other buttons (e.g., Skip during busy state); user could dismiss mid-analyze which drops the pending toast context (though setBusy state prevents duplicate submits, closing overlay while API is in flight is possible)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "demo@competeiq.ai / demo1234 (has is_demo=true after /api/reset-demo)",
+  "seed_data_creation": "None. Demo dataset was restored via POST /api/reset-demo after tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Onboarding wizard fully working. After a successful analyze on linear.app, company becomes 'Linear', is_demo=false, demo competitors/insights cleared, then adding Jira competitor and generate insights populates dashboard. Always POST /api/reset-demo (Bearer ciq_token) after any run that triggers /company/analyze to restore demo state.",
+  "rca of the issue": "N/A - no failures observed."
+}
