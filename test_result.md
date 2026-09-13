@@ -123,12 +123,27 @@ backend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
-  run_ui: false
+  test_sequence: 2
+  run_ui: true
+
+frontend:
+  - task: "End-to-end user access (demo login, new signup, returning user) with dashboard redirect"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/Login.jsx, frontend/src/context/AuthContext.jsx, frontend/src/lib/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "frontend/.env (REACT_APP_BACKEND_URL) was missing so the app could not reach the backend; recreated and frontend restarted. Manual screenshot confirms demo login now redirects to dashboard. Needs full E2E verification of demo login, new signup, and returning-user (logout then login again) flows, all redirecting to the dashboard."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ ALL E2E AUTH TESTS PASSED. Comprehensive UI testing completed via Playwright. Results: (1) DEMO LOGIN: 'Try the demo' button correctly prefills demo@competeiq.ai/demo1234, login successful, redirected to dashboard at '/', dashboard loads with navigation, company data (NimbusIQ), competitive scores (78/100 overall, 8.2/10 price, 67% feature strength), 3 analyzed competitors, pricing comparison, and AI insights visible ✅ (2) NEW SIGNUP: Created unique test user (test+1789309115@example.com), signup successful with 'Account created — demo data loaded' toast, redirected to dashboard, seeded data visible, onboarding modal appears as expected ✅ (3) RETURNING USER: Logout successful (after closing onboarding modal), redirected to /login, re-login with same credentials successful, 'Welcome back' toast shown, redirected to dashboard ✅ (4) NEGATIVE TEST: Wrong password for demo@competeiq.ai shows 'Invalid email or password' error toast, stays on /login page (no redirect) ✅. JWT token stored in localStorage under 'ciq_token'. All authentication flows working correctly. Minor note: Onboarding modal appears after login/signup and needs to be closed before accessing other UI elements (expected behavior, not a bug)."
 
 test_plan:
-  current_focus:
-    - "Demo credentials login"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -138,3 +153,5 @@ agent_communication:
     -message: "Please test login with demo credentials demo@competeiq.ai / demo1234 via POST /api/auth/login. Confirm it returns access_token + user, then confirm the token works on GET /api/auth/me, GET /api/company, GET /api/competitors (should show seeded demo data), and GET /api/insights. Do NOT run live scrape/AI analyze endpoints (they hit external sites/LLM)."
     -agent: "testing"
     -message: "✅ Backend testing complete. All 7 tests passed successfully. Demo credentials login (demo@competeiq.ai / demo1234) is working correctly. All protected endpoints return expected seeded data (NimbusIQ company profile, 3 analyzed competitors, insights report). Negative test (wrong password → 401) and fresh registration with data seeding also working. No critical issues found. Ready for main agent to summarize and finish."
+    -agent: "testing"
+    -message: "✅ E2E UI testing complete. All 4 authentication flows tested and working: (1) Demo login with prefilled credentials → dashboard redirect ✅ (2) New user signup with unique email → dashboard with seeded data ✅ (3) Logout then re-login (returning user) → dashboard redirect ✅ (4) Wrong password → error toast, stays on /login ✅. Dashboard displays full competitive intelligence data including scores, competitors (Datadog, Dynatrace, New Relic), pricing comparison, and AI insights. JWT token management working correctly. No critical issues found. All authentication requirements met. Ready for main agent to summarize and finish."
