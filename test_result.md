@@ -101,3 +101,40 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "User cannot log in with the demo credentials (demo@competeiq.ai / demo1234)."
+
+backend:
+  - task: "Demo credentials login"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Root cause: backend/.env and frontend/.env were missing so backend crashed on startup (KeyError MONGO_URL) and login failed entirely. Additionally, the demo user account was never created by any code (only the 'Use demo' button pre-fills the fields). Fix: recreated both .env files and added idempotent ensure_demo_user() on startup that creates demo@competeiq.ai/demo1234 and seeds its dataset. Verified in DB: demo user exists with 1 company + 3 competitors. Needs testing agent to confirm POST /api/auth/login with demo creds returns a token and protected routes work."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ ALL TESTS PASSED. Comprehensive backend testing completed via backend_test.py. Results: (1) POST /api/auth/login with demo@competeiq.ai/demo1234 returns 200 with access_token and user object ✅ (2) GET /api/auth/me with token returns demo user ✅ (3) GET /api/company returns NimbusIQ Observability Cloud profile ✅ (4) GET /api/competitors returns 3 seeded competitors (Datadog, Dynatrace, New Relic) all with status 'Analyzed' ✅ (5) GET /api/insights returns seeded insights report with executive_summary and feature_matrix ✅ (6) POST /api/auth/login with wrong password correctly returns 401 ✅ (7) POST /api/auth/register with new random user returns token and seeds demo data (NimbusIQ + 3 competitors) ✅. Demo credentials login fix is fully working."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Demo credentials login"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Please test login with demo credentials demo@competeiq.ai / demo1234 via POST /api/auth/login. Confirm it returns access_token + user, then confirm the token works on GET /api/auth/me, GET /api/company, GET /api/competitors (should show seeded demo data), and GET /api/insights. Do NOT run live scrape/AI analyze endpoints (they hit external sites/LLM)."
+    -agent: "testing"
+    -message: "✅ Backend testing complete. All 7 tests passed successfully. Demo credentials login (demo@competeiq.ai / demo1234) is working correctly. All protected endpoints return expected seeded data (NimbusIQ company profile, 3 analyzed competitors, insights report). Negative test (wrong password → 401) and fresh registration with data seeding also working. No critical issues found. Ready for main agent to summarize and finish."

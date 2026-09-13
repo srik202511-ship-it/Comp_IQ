@@ -289,6 +289,29 @@ In positioning: x = price competitiveness (0-10, higher=more affordable), y = fe
 
 
 # ----------------------------- Seeding -----------------------------
+DEMO_EMAIL = "demo@competeiq.ai"
+DEMO_PASSWORD = "demo1234"
+
+
+async def ensure_demo_user():
+    """Idempotently create the demo account so the 'Use demo' login always works."""
+    existing = await db.users.find_one({"email": DEMO_EMAIL})
+    if existing:
+        await seed_user_data(existing["id"])
+        return
+    uid = str(uuid.uuid4())
+    user = {
+        "id": uid,
+        "email": DEMO_EMAIL,
+        "password_hash": hash_password(DEMO_PASSWORD),
+        "name": "Demo User",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(user)
+    await seed_user_data(uid)
+    logger.info(f"[seed] demo user ensured: {DEMO_EMAIL}")
+
+
 async def seed_user_data(user_id: str):
     existing = await db.company.find_one({"user_id": user_id})
     if existing:
@@ -513,6 +536,10 @@ async def startup():
     await db.users.create_index("email", unique=True)
     await db.competitors.create_index("user_id")
     await db.company.create_index("user_id")
+    try:
+        await ensure_demo_user()
+    except Exception as e:
+        logger.error(f"[seed] ensure_demo_user failed: {e}")
 
 
 @app.on_event("shutdown")
