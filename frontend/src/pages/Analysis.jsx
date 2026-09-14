@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Play, Scale, Trophy, Info, CheckCircle2, XCircle, MinusCircle,
   ShieldCheck, TrendingUp, Target, Search, HelpCircle, FileSearch, AlertTriangle, Download,
+  LayoutDashboard,
 } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { PageHeader, Card, SectionTitle } from "../components/common";
@@ -50,6 +52,7 @@ const dimBadge = (status) => ({
 }[status] || "bg-slate-700/40 text-slate-400 border-slate-600");
 
 export default function Analysis() {
+  const navigate = useNavigate();
   const [report, setReport] = useState(undefined);
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState("normal");
@@ -98,6 +101,10 @@ export default function Analysis() {
 
   const RunButton = (
     <div className="flex items-center gap-2">
+      <button onClick={() => navigate("/")} data-testid="goto-dashboard-btn"
+        className="inline-flex items-center gap-2 border border-[#1f2937] bg-[#111827] hover:border-blue-500/40 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+        <LayoutDashboard className="w-4 h-4" /> View Dashboard
+      </button>
       {report && (
         <button onClick={downloadPdf} data-testid="download-pdf-btn"
           className="inline-flex items-center gap-2 border border-[#1f2937] bg-[#111827] hover:border-blue-500/40 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
