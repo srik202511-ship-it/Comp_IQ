@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Radar, Sparkles, Building2, Lightbulb, ArrowRight, Loader2, Check, X, PartyPopper,
@@ -17,13 +18,14 @@ const INDUSTRIES = ["SaaS", "Electric Vehicles", "Consumer Electronics", "Bankin
 
 export default function Onboarding({ onClose }) {
   const { company, refresh } = useData();
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [website, setWebsite] = useState("");
   const [comp, setComp] = useState({ company_name: "", industry: "SaaS", website: "" });
 
   const dismiss = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); };
-  const finish = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); };
+  const finish = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); navigate("/"); };
 
   const analyzeProduct = async () => {
     if (!website.trim()) { toast.error("Enter your product website"); return; }
