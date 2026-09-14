@@ -1,7 +1,8 @@
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, LabelList, Legend,
+  BarChart, Bar, Cell, LabelList, Legend, ReferenceLine, ReferenceArea,
+  LineChart, Line,
 } from "recharts";
 import { SERIES_COLORS } from "./common";
 
@@ -81,4 +82,83 @@ export function ValueBarChart({ data, dataKey = "value", nameKey = "company", su
 
 function Empty() {
   return <div className="h-[300px] flex items-center justify-center text-slate-500 text-sm">No data available yet.</div>;
+}
+
+// Trend line chart: data rows are { label, [seriesName]: value }.
+export function TrendChart({ data, series }) {
+  if (!data?.length || !series?.length) return <Empty />;
+  return (
+    <ResponsiveContainer width="100%" height={340}>
+      <LineChart data={data} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
+        <CartesianGrid stroke="#1f2937" vertical={false} />
+        <XAxis dataKey="label" tick={{ fill: "#9CA3AF", fontSize: 11 }} />
+        <YAxis domain={[0, 100]} tick={AXIS} />
+        <Tooltip {...TOOLTIP_STYLE} cursor={{ stroke: "#374151" }} />
+        <Legend wrapperStyle={{ fontSize: 12, color: "#cbd5e1" }} />
+        {series.map((s, i) => (
+          <Line key={s.name} type="monotone" dataKey={s.name}
+            stroke={s.color || SERIES_COLORS[i % SERIES_COLORS.length]}
+            strokeWidth={s.isOurs ? 3 : 2}
+            strokeDasharray={s.isOurs ? "" : ""}
+            dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// 2x2 matrix: X = Comparability, Y = Competitive Strength. Split at 60 / 70.
+export function ComparabilityMatrix({ points }) {
+  if (!points?.length) return <Empty />;
+  return (
+    <ResponsiveContainer width="100%" height={380}>
+      <ScatterChart margin={{ top: 20, right: 30, bottom: 30, left: 10 }}>
+        <CartesianGrid stroke="#1f2937" />
+        <ReferenceArea x1={60} x2={100} y1={70} y2={100} fill="#10B981" fillOpacity={0.05} />
+        <ReferenceArea x1={0} x2={60} y1={0} y2={70} fill="#64748b" fillOpacity={0.04} />
+        <XAxis type="number" dataKey="x" name="Comparability" domain={[0, 100]} tick={AXIS}
+          label={{ value: "Comparability →", position: "insideBottom", offset: -15, fill: "#6B7280", fontSize: 12 }} />
+        <YAxis type="number" dataKey="y" name="Competitive" domain={[0, 100]} tick={AXIS}
+          label={{ value: "Competitive Strength →", angle: -90, position: "insideLeft", fill: "#6B7280", fontSize: 12 }} />
+        <ZAxis range={[240, 240]} />
+        <ReferenceLine x={60} stroke="#374151" strokeDasharray="4 4" />
+        <ReferenceLine y={70} stroke="#374151" strokeDasharray="4 4" />
+        <Tooltip {...TOOLTIP_STYLE} cursor={{ strokeDasharray: "3 3", stroke: "#374151" }}
+          formatter={(v, n) => [`${v}`, n]} />
+        {points.map((p, i) => (
+          <Scatter key={p.name} name={p.name} data={[p]}
+            fill={SERIES_COLORS[(i % (SERIES_COLORS.length - 1)) + 1]}>
+            <LabelList dataKey="name" position="top" style={{ fill: "#e2e8f0", fontSize: 11, fontWeight: 600 }} />
+          </Scatter>
+        ))}
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Value-for-money scatter: X = normalized annual cost, Y = capability score.
+export function ValueScatter({ points, currency = "\u20b9" }) {
+  const valid = (points || []).filter((p) => p.x != null && p.y != null);
+  if (!valid.length) return <Empty />;
+  return (
+    <ResponsiveContainer width="100%" height={360}>
+      <ScatterChart margin={{ top: 20, right: 30, bottom: 30, left: 20 }}>
+        <CartesianGrid stroke="#1f2937" />
+        <XAxis type="number" dataKey="x" name="Annual cost" tick={AXIS}
+          tickFormatter={(v) => `${currency}${Math.round(v / 1000)}k`}
+          label={{ value: "Normalized annual cost →", position: "insideBottom", offset: -15, fill: "#6B7280", fontSize: 12 }} />
+        <YAxis type="number" dataKey="y" name="Capability" domain={[0, 100]} tick={AXIS}
+          label={{ value: "Capability →", angle: -90, position: "insideLeft", fill: "#6B7280", fontSize: 12 }} />
+        <ZAxis range={[240, 240]} />
+        <Tooltip {...TOOLTIP_STYLE} cursor={{ strokeDasharray: "3 3", stroke: "#374151" }}
+          formatter={(v, n) => (n === "Annual cost" ? [`${currency}${Number(v).toLocaleString()}`, n] : [v, n])} />
+        {valid.map((p, i) => (
+          <Scatter key={p.name} name={p.name} data={[p]}
+            fill={p.is_ours ? "#3B82F6" : SERIES_COLORS[(i % (SERIES_COLORS.length - 1)) + 1]}>
+            <LabelList dataKey="name" position="top" style={{ fill: "#e2e8f0", fontSize: 11, fontWeight: 600 }} />
+          </Scatter>
+        ))}
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
 }

@@ -25,6 +25,9 @@ from pydantic import BaseModel, EmailStr, Field
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 import demo_data
+import demo_ci
+import crawler
+from ci_engine import assemble, prompts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("competeiq")
@@ -164,6 +167,22 @@ def scrape_website(url: str) -> dict:
             logger.info(f"scrape fail {p}: {e}")
     return {"ok": ok, "title": title, "text": " ".join(collected)[:9000]}
 
+def collection_meta(result: dict) -> dict:
+    """Compact per-competitor data-collection record for the dashboard."""
+    return {
+        "status": result.get("overall_status", "UNKNOWN"),
+        "restricted": result.get("restricted", False),
+        "message": result.get("message", ""),
+        "last_crawl": result.get("collected_at"),
+        "pages_analyzed": result.get("pages_analyzed", 0),
+        "sources_used": result.get("sources_used", 0),
+        "extraction_confidence": result.get("extraction_confidence", 0),
+        "sources": result.get("pages", []),
+        "failed_pages": result.get("failed_pages", []),
+    }
+
+
+
 
 async def ai_json(system: str, prompt: str) -> dict:
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=str(uuid.uuid4()), system_message=system).with_model("openai", "gpt-5.4")
@@ -289,6 +308,29 @@ In positioning: x = price competitiveness (0-10, higher=more affordable), y = fe
 
 
 # ----------------------------- Seeding -----------------------------
+DEMO_EMAIL = "demo@competeiq.ai"
+DEMO_PASSWORD = "demo1234"
+
+
+async def ensure_demo_user():
+    """Idempotently create the demo account so the 'Use demo' login always works."""
+    existing = await db.users.find_one({"email": DEMO_EMAIL})
+    if existing:
+        await seed_user_data(existing["id"])
+        return
+    uid = str(uuid.uuid4())
+    user = {
+        "id": uid,
+        "email": DEMO_EMAIL,
+        "password_hash": hash_password(DEMO_PASSWORD),
+        "name": "Demo User",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(user)
+    await seed_user_data(uid)
+    logger.info(f"[seed] demo user ensured: {DEMO_EMAIL}")
+
+
 async def seed_user_data(user_id: str):
     existing = await db.company.find_one({"user_id": user_id})
     if existing:
@@ -296,13 +338,29 @@ async def seed_user_data(user_id: str):
     comp = {**demo_data.DEMO_COMPANY, "id": str(uuid.uuid4()), "user_id": user_id,
             "scores": demo_data.demo_company_scores(), "is_demo": True}
     await db.company.insert_one(comp)
+    comp_docs = []
     for c in demo_data.DEMO_COMPETITORS:
         doc = {**c, "id": str(uuid.uuid4()), "user_id": user_id,
                "last_analyzed": datetime.now(timezone.utc).isoformat(),
                "created_at": datetime.now(timezone.utc).isoformat()}
         await db.competitors.insert_one(doc)
+        comp_docs.append(doc)
     ins = {**demo_data.DEMO_INSIGHTS, "id": str(uuid.uuid4()), "user_id": user_id}
     await db.insights.insert_one(ins)
+    # Pre-compute the Apples-to-Apples CI report for the demo dataset
+    try:
+        report = demo_ci.build_demo_report(comp, comp_docs)
+        report.update({"id": str(uuid.uuid4()), "user_id": user_id,
+                       "generated_at": datetime.now(timezone.utc).isoformat()})
+        for d in ("_id",):
+            report.pop(d, None)
+        await db.ci_analyses.insert_one(report)
+        # Seed backdated history snapshots so the trend view is populated
+        for snap in demo_ci.build_demo_history(report):
+            snap.update({"id": str(uuid.uuid4()), "user_id": user_id})
+            await db.ci_history.insert_one(snap)
+    except Exception as e:
+        logger.error(f"[seed] demo CI report failed: {e}")
 
 
 def clean(doc):
@@ -369,15 +427,16 @@ async def update_company(body: CompanyBody, user: dict = Depends(get_current_use
 
 class CompanyAnalyzeBody(BaseModel):
     website: str
+    reset: bool = False
 
 
 @api_router.post("/company/analyze")
 async def analyze_company(body: CompanyAnalyzeBody, user: dict = Depends(get_current_user)):
-    scraped = scrape_website(body.website)
-    if not scraped["ok"]:
-        raise HTTPException(status_code=422, detail=f"Could not retrieve website data for {body.website}. Please check the URL and retry.")
+    result = await crawler.acquire(body.website)
+    if not result["ok"]:
+        raise HTTPException(status_code=422, detail=result.get("message") or f"Could not retrieve website data for {body.website}. Please check the URL and retry.")
     try:
-        profile = await ai_json(COMPANY_SYSTEM, company_prompt(body.website, scraped))
+        profile = await ai_json(COMPANY_SYSTEM, company_prompt(body.website, result))
     except Exception as e:
         logger.error(f"company analyze AI error: {e}")
         raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
@@ -392,6 +451,13 @@ async def analyze_company(body: CompanyAnalyzeBody, user: dict = Depends(get_cur
     # Clear demo dataset so the user only sees their own product going forward
     await db.competitors.delete_many({"user_id": user["id"], "is_demo": True})
     await db.insights.delete_many({"user_id": user["id"], "is_demo": True})
+    if body.reset:
+        # Fresh setup (from the setup wizard): wipe ALL prior competitors, insights,
+        # CI analyses and history so this becomes a brand-new comparison.
+        await db.competitors.delete_many({"user_id": user["id"]})
+        await db.insights.delete_many({"user_id": user["id"]})
+        await db.ci_analyses.delete_many({"user_id": user["id"]})
+        await db.ci_history.delete_many({"user_id": user["id"]})
     return clean(await db.company.find_one({"user_id": user["id"]}))
 
 
@@ -424,21 +490,60 @@ async def analyze_competitor(comp_id: str, user: dict = Depends(get_current_user
     if not comp:
         raise HTTPException(status_code=404, detail="Competitor not found")
     our = await db.company.find_one({"user_id": user["id"]}) or {}
-    scraped = scrape_website(comp.get("website", ""))
-    if not scraped["ok"]:
-        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": "Error"}})
-        raise HTTPException(status_code=422, detail=f"Could not retrieve website data for {comp.get('website')}. Please check the URL and retry.")
+    result = await crawler.acquire(comp.get("website", ""), comp.get("company_name", ""))
+    meta = collection_meta(result)
+    now = datetime.now(timezone.utc).isoformat()
+    if not result["ok"]:
+        status = "Restricted" if result.get("restricted") else "Error"
+        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": status, "data_collection": meta, "last_analyzed": now}})
+        raise HTTPException(status_code=422, detail=result.get("message") or f"Could not collect public data for {comp.get('website')}.")
     try:
-        analysis = await ai_json(ANALYZE_SYSTEM, analyze_prompt(comp, scraped, our))
+        analysis = await ai_json(ANALYZE_SYSTEM, analyze_prompt(comp, result, our))
     except Exception as e:
         logger.error(f"analyze AI error: {e}")
-        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": "Error"}})
+        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": "Error", "data_collection": meta}})
         raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
-    analysis["collected_at"] = datetime.now(timezone.utc).isoformat()
+    analysis["collected_at"] = now
     await db.competitors.update_one(
         {"id": comp_id},
         {"$set": {"analysis": analysis, "status": "Analyzed", "is_demo": False,
-                  "last_analyzed": datetime.now(timezone.utc).isoformat()}},
+                  "data_collection": meta, "last_analyzed": now}},
+    )
+    return clean(await db.competitors.find_one({"id": comp_id}))
+
+
+class ManualContentBody(BaseModel):
+    text: Optional[str] = None
+    url: Optional[str] = None
+
+
+@api_router.post("/competitors/{comp_id}/manual")
+async def provide_manual_content(comp_id: str, body: ManualContentBody, user: dict = Depends(get_current_user)):
+    """Legitimate fallback: analyze a competitor from a user-provided URL or pasted content."""
+    comp = await db.competitors.find_one({"id": comp_id, "user_id": user["id"]})
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    our = await db.company.find_one({"user_id": user["id"]}) or {}
+    if body.url and not (body.text and body.text.strip()):
+        result = await crawler.acquire(body.url, comp.get("company_name", ""))
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("message") or "Could not collect data from that URL.")
+    elif body.text and body.text.strip():
+        result = crawler.from_user_text(body.text, comp.get("company_name", ""), body.url or comp.get("website", ""))
+    else:
+        raise HTTPException(status_code=400, detail="Provide page content or a specific URL.")
+    meta = collection_meta(result)
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        analysis = await ai_json(ANALYZE_SYSTEM, analyze_prompt(comp, result, our))
+    except Exception as e:
+        logger.error(f"manual analyze AI error: {e}")
+        raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
+    analysis["collected_at"] = now
+    await db.competitors.update_one(
+        {"id": comp_id},
+        {"$set": {"analysis": analysis, "status": "Analyzed", "is_demo": False,
+                  "data_collection": meta, "last_analyzed": now}},
     )
     return clean(await db.competitors.find_one({"id": comp_id}))
 
@@ -493,8 +598,121 @@ async def reset_demo(user: dict = Depends(get_current_user)):
     await db.company.delete_many({"user_id": user["id"]})
     await db.competitors.delete_many({"user_id": user["id"]})
     await db.insights.delete_many({"user_id": user["id"]})
+    await db.ci_analyses.delete_many({"user_id": user["id"]})
+    await db.ci_history.delete_many({"user_id": user["id"]})
     await seed_user_data(user["id"])
     return {"message": "Demo data reloaded"}
+
+
+# ----------------------------- Apples-to-Apples CI Engine -----------------------------
+class AnalysisRunBody(BaseModel):
+    competitor_ids: Optional[List[str]] = None
+    mode: str = "normal"  # normal | exploratory
+
+
+async def classify_our_product(company: dict) -> dict:
+    """LLM-assisted structured profile of our own product (classification + dims + features + pricing)."""
+    return await ai_json(prompts.our_profile_system(), prompts.our_profile_prompt(company))
+
+
+@api_router.get("/analysis")
+async def get_analysis(user: dict = Depends(get_current_user)):
+    return clean(await db.ci_analyses.find_one({"user_id": user["id"]}, sort=[("generated_at", -1)]))
+
+
+@api_router.post("/analysis/run")
+async def run_analysis(body: AnalysisRunBody, user: dict = Depends(get_current_user)):
+    company = await db.company.find_one({"user_id": user["id"]})
+    if not company:
+        raise HTTPException(status_code=400, detail="Set up your company profile first.")
+
+    query = {"user_id": user["id"]}
+    if body.competitor_ids:
+        query["id"] = {"$in": body.competitor_ids}
+    competitors = await db.competitors.find(query).to_list(50)
+    if not competitors:
+        raise HTTPException(status_code=400, detail="Add at least one competitor first.")
+
+    mode = "exploratory" if body.mode == "exploratory" else "normal"
+
+    # 1) Classify our product
+    try:
+        our_extracted = await classify_our_product(company)
+    except Exception as e:
+        logger.error(f"CI our-product classification failed: {e}")
+        raise HTTPException(status_code=502, detail="AI classification of your product failed. Please retry.")
+    our_block = assemble.build_our_block(company, our_extracted)
+
+    # 2) Analyze each competitor (scrape + single LLM extraction)
+    comp_blocks, errors = [], []
+    for comp in competitors:
+        try:
+            result = await crawler.acquire(comp.get("website", ""), comp.get("company_name", ""),
+                                           use_browser=False, max_pages=3, max_runtime=25, max_requests=5)
+            meta = collection_meta(result)
+            await db.competitors.update_one({"id": comp.get("id")}, {"$set": {"data_collection": meta}})
+            if not result["ok"]:
+                errors.append({"competitor": comp.get("company_name"),
+                               "reason": result.get("message") or "Could not collect public data.",
+                               "status": result.get("overall_status")})
+                continue
+            extracted = await ai_json(
+                prompts.competitor_system(),
+                prompts.competitor_prompt(our_block.get("classification", {}), comp, result.get("text", "")),
+            )
+            comp_blocks.append(assemble.build_competitor_block(our_block, comp, extracted, mode=mode))
+        except Exception as e:
+            logger.error(f"CI competitor analyze failed for {comp.get('company_name')}: {e}")
+            errors.append({"competitor": comp.get("company_name"), "reason": "AI analysis failed."})
+
+    if not comp_blocks:
+        raise HTTPException(status_code=502, detail="Analysis failed for all competitors. Please retry.")
+
+    # 3) Assemble deterministic report
+    report = assemble.assemble_report(our_block, comp_blocks, mode=mode)
+    report["errors"] = errors
+
+    # 4) AI strategic insights (references computed numbers)
+    try:
+        report["insights"] = await ai_json(
+            prompts.insights_system(),
+            prompts.insights_prompt(assemble.summarize_for_insights(report)),
+        )
+    except Exception as e:
+        logger.error(f"CI insights failed: {e}")
+        report["insights"] = {"executive_summary": "", "defend": [], "close_the_gap": [],
+                              "differentiate": [], "investigate": []}
+
+    from ci_engine.taxonomy import DISCLAIMER
+    report["disclaimer"] = DISCLAIMER
+    report["is_demo"] = False
+
+    # 5) Persist (replace latest for this user)
+    existing = await db.ci_analyses.find_one({"user_id": user["id"]})
+    report.update({"user_id": user["id"], "generated_at": datetime.now(timezone.utc).isoformat()})
+    if existing:
+        report["id"] = existing["id"]
+        await db.ci_analyses.update_one({"user_id": user["id"]}, {"$set": report})
+    else:
+        report["id"] = str(uuid.uuid4())
+        await db.ci_analyses.insert_one(report)
+    # Append a history snapshot so users can track how scores shift over time
+    try:
+        snap = assemble.snapshot_from_report(report)
+        snap.update({"id": str(uuid.uuid4()), "user_id": user["id"],
+                     "generated_at": report["generated_at"]})
+        await db.ci_history.insert_one(snap)
+    except Exception as e:
+        logger.error(f"CI history snapshot failed: {e}")
+    return clean(await db.ci_analyses.find_one({"user_id": user["id"]}))
+
+
+@api_router.get("/analysis/history")
+async def get_analysis_history(user: dict = Depends(get_current_user)):
+    items = await db.ci_history.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("generated_at", 1).to_list(200)
+    return items
 
 
 app.include_router(api_router)
@@ -513,6 +731,10 @@ async def startup():
     await db.users.create_index("email", unique=True)
     await db.competitors.create_index("user_id")
     await db.company.create_index("user_id")
+    try:
+        await ensure_demo_user()
+    except Exception as e:
+        logger.error(f"[seed] ensure_demo_user failed: {e}")
 
 
 @app.on_event("shutdown")
