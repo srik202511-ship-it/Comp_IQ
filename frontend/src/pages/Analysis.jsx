@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Play, Scale, Trophy, Info, CheckCircle2, XCircle, MinusCircle,
@@ -53,6 +53,7 @@ const dimBadge = (status) => ({
 
 export default function Analysis() {
   const navigate = useNavigate();
+  const savedId = new URLSearchParams(useLocation().search).get("saved");
   const [report, setReport] = useState(undefined);
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState("normal");
@@ -60,7 +61,8 @@ export default function Analysis() {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/analysis");
+      const url = savedId ? `/analysis/saved/${savedId}` : "/analysis";
+      const { data } = await api.get(url);
       setReport(data || null);
       if (data?.competitors?.length) {
         const firstComparable = data.competitors.find((c) => c.comparability?.is_comparable) || data.competitors[0];
@@ -69,7 +71,7 @@ export default function Analysis() {
     } catch {
       setReport(null);
     }
-  }, []);
+  }, [savedId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -99,7 +101,20 @@ export default function Analysis() {
     }
   };
 
-  const RunButton = (
+  const RunButton = savedId ? (
+    <div className="flex items-center gap-2">
+      <button onClick={() => navigate("/history")} data-testid="back-to-saved-btn"
+        className="inline-flex items-center gap-2 border border-[#1f2937] bg-[#111827] hover:border-blue-500/40 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+        <LayoutDashboard className="w-4 h-4" /> Back to Saved
+      </button>
+      {report && (
+        <button onClick={downloadPdf} data-testid="download-pdf-btn"
+          className="inline-flex items-center gap-2 border border-[#1f2937] bg-[#111827] hover:border-blue-500/40 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+          <Download className="w-4 h-4" /> Download PDF
+        </button>
+      )}
+    </div>
+  ) : (
     <div className="flex items-center gap-2">
       <button onClick={() => navigate("/")} data-testid="goto-dashboard-btn"
         className="inline-flex items-center gap-2 border border-[#1f2937] bg-[#111827] hover:border-blue-500/40 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
@@ -130,10 +145,20 @@ export default function Analysis() {
   return (
     <div className="space-y-8" data-testid="analysis-page">
       <PageHeader
-        title="Apples-to-Apples Analysis"
-        subtitle="First we validate whether the comparison is fair, then we score how well each product performs on comparable dimensions."
+        title={savedId ? "Saved Comparison" : "Apples-to-Apples Analysis"}
+        subtitle={savedId
+          ? "A historical snapshot from your Saved Comparisons. Scores are preserved exactly as generated — nothing is re-crawled or recalculated."
+          : "First we validate whether the comparison is fair, then we score how well each product performs on comparable dimensions."}
         right={RunButton}
       />
+      {savedId && report?.created_at && (
+        <Card className="p-3 border-amber-500/20 bg-amber-500/[0.04]" testid="saved-banner">
+          <div className="text-amber-200 text-sm flex items-center gap-2">
+            <Info className="w-4 h-4 shrink-0" />
+            Viewing a saved snapshot from {new Date(report.created_at).toLocaleString()}. This is read-only history.
+          </div>
+        </Card>
+      )}
 
       {/* Methodology banner */}
       <Card className="p-4 border-blue-500/20 bg-blue-500/[0.03]">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, Loader2, Sparkles, FileDown } from "lucide-react";
+import { RefreshCw, Loader2, Sparkles, FileDown, Wand2 } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { exportDashboardPdf } from "../lib/exportPdf";
 import { useData } from "../context/DataContext";
@@ -16,8 +16,23 @@ import { RadarComparison, PositioningMap } from "../components/Charts";
 import { personalizeInsights, getOurName } from "../lib/personalize";
 
 export default function Dashboard() {
-  const { company, competitors, insights, loading, setInsights } = useData();
+  const { company, competitors, insights, loading, setInsights, openOnboarding } = useData();
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const generateCustom = async () => {
+    setSaving(true);
+    const t = toast.loading("Saving your current comparison…");
+    try {
+      await api.post("/analysis/save");
+      toast.success("Current comparison saved to history", { id: t });
+    } catch (e) {
+      toast.dismiss(t);
+    } finally {
+      setSaving(false);
+      openOnboarding();
+    }
+  };
 
   const regenerate = async () => {
     setBusy(true);
@@ -61,10 +76,10 @@ export default function Dashboard() {
               className="inline-flex items-center gap-2 border border-[#374151] hover:border-blue-500/50 hover:text-blue-300 text-slate-300 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50">
               <FileDown className="w-4 h-4" /> Export PDF
             </button>
-            <button onClick={regenerate} disabled={busy} data-testid="regenerate-insights-btn"
+            <button onClick={generateCustom} disabled={saving} data-testid="generate-custom-insights-btn"
               className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              Regenerate Insights
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+              Generate custom insights
             </button>
           </div>
         }

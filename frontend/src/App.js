@@ -6,8 +6,6 @@ import { DataProvider } from "./context/DataContext";
 import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
-import Competitors from "./pages/Competitors";
-import Compare from "./pages/Compare";
 import Analysis from "./pages/Analysis";
 import History from "./pages/History";
 import Insights from "./pages/Insights";
@@ -37,8 +35,8 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Protected><Layout /></Protected>}>
               <Route index element={<Dashboard />} />
-              <Route path="competitors" element={<Competitors />} />
-              <Route path="compare" element={<Compare />} />
+              <Route path="competitors" element={<Navigate to="/" replace />} />
+              <Route path="compare" element={<Navigate to="/analysis" replace />} />
               <Route path="analysis" element={<Analysis />} />
               <Route path="history" element={<History />} />
               <Route path="insights" element={<Insights />} />

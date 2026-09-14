@@ -359,6 +359,13 @@ async def seed_user_data(user_id: str):
         for snap in demo_ci.build_demo_history(report):
             snap.update({"id": str(uuid.uuid4()), "user_id": user_id})
             await db.ci_history.insert_one(snap)
+        # Seed one saved comparison (older snapshot) so Saved Comparisons is populated
+        saved = dict(report)
+        saved.update({"id": str(uuid.uuid4()), "user_id": user_id,
+                      "created_at": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+                      "expires_at": (datetime.now(timezone.utc) + timedelta(days=27)).isoformat()})
+        saved.pop("_id", None)
+        await db.ci_saved.insert_one(saved)
     except Exception as e:
         logger.error(f"[seed] demo CI report failed: {e}")
 
@@ -600,6 +607,7 @@ async def reset_demo(user: dict = Depends(get_current_user)):
     await db.insights.delete_many({"user_id": user["id"]})
     await db.ci_analyses.delete_many({"user_id": user["id"]})
     await db.ci_history.delete_many({"user_id": user["id"]})
+    await db.ci_saved.delete_many({"user_id": user["id"]})
     await seed_user_data(user["id"])
     return {"message": "Demo data reloaded"}
 
@@ -713,6 +721,62 @@ async def get_analysis_history(user: dict = Depends(get_current_user)):
         {"user_id": user["id"]}, {"_id": 0}
     ).sort("generated_at", 1).to_list(200)
     return items
+
+
+def _saved_summary(doc):
+    ours = doc.get("our_product", {})
+    return {
+        "id": doc["id"],
+        "created_at": doc.get("created_at"),
+        "expires_at": doc.get("expires_at"),
+        "our_product": ours.get("name", "Our Product"),
+        "competitors": [c.get("name") for c in doc.get("competitors", [])],
+        "apples_to_apples": [
+            {"name": c["name"], "score": c["comparability"]["score"]}
+            for c in doc.get("competitors", [])
+        ],
+        "competitive": [
+            {"name": c["name"], "score": (c.get("competitive_score") or {}).get("score")}
+            for c in doc.get("competitors", [])
+        ],
+    }
+
+
+async def _purge_expired_saved(user_id):
+    await db.ci_saved.delete_many({"user_id": user_id, "expires_at": {"$lt": datetime.now(timezone.utc).isoformat()}})
+
+
+@api_router.post("/analysis/save")
+async def save_current_comparison(user: dict = Depends(get_current_user)):
+    """Persist the current comparison into Saved Comparisons (30-day retention). No-op if none."""
+    current = await db.ci_analyses.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not current or not current.get("competitors"):
+        return {"saved": False}
+    now = datetime.now(timezone.utc)
+    snapshot = dict(current)
+    snapshot["id"] = str(uuid.uuid4())
+    snapshot["user_id"] = user["id"]
+    snapshot["created_at"] = current.get("generated_at") or now.isoformat()
+    snapshot["expires_at"] = (now + timedelta(days=30)).isoformat()
+    await db.ci_saved.insert_one(snapshot)
+    return {"saved": True, "id": snapshot["id"]}
+
+
+@api_router.get("/analysis/saved")
+async def list_saved_comparisons(user: dict = Depends(get_current_user)):
+    await _purge_expired_saved(user["id"])
+    docs = await db.ci_saved.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return [_saved_summary(d) for d in docs]
+
+
+@api_router.get("/analysis/saved/{saved_id}")
+async def get_saved_comparison(saved_id: str, user: dict = Depends(get_current_user)):
+    await _purge_expired_saved(user["id"])
+    doc = await db.ci_saved.find_one({"id": saved_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Saved comparison not found or expired")
+    return doc
+
 
 
 app.include_router(api_router)

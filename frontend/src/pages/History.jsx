@@ -12,13 +12,15 @@ const fmtDate = (s) => {
 
 export default function History() {
   const [snaps, setSnaps] = useState(undefined);
+  const [saved, setSaved] = useState([]);
   const [metric, setMetric] = useState("competitive"); // competitive | comparability
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/analysis/history");
-      setSnaps(Array.isArray(data) ? data : []);
+      const [h, s] = await Promise.all([api.get("/analysis/history"), api.get("/analysis/saved")]);
+      setSnaps(Array.isArray(h.data) ? h.data : []);
+      setSaved(Array.isArray(s.data) ? s.data : []);
     } catch {
       setSnaps([]);
     }
@@ -85,6 +87,37 @@ export default function History() {
           </button>
         }
       />
+
+      {/* Saved full comparisons (reopenable snapshots, 30-day retention) */}
+      <div>
+        <SectionTitle eyebrow="History" title="Saved Comparisons (30-day retention)" />
+        {saved.length === 0 ? (
+          <Card className="p-6 text-center text-slate-500 text-sm" testid="saved-empty">
+            No saved comparisons yet. Use Generate custom insights on the Dashboard to save your current comparison before starting a new one.
+          </Card>
+        ) : (
+          <div className="space-y-2.5" data-testid="saved-list">
+            {saved.map((s) => (
+              <Card key={s.id} className="p-4 flex items-center justify-between gap-4" testid="saved-item">
+                <div className="min-w-0">
+                  <div className="text-slate-100 font-medium truncate">
+                    {s.our_product} <span className="text-slate-500">vs</span> {s.competitors.join(" · ") || "—"}
+                  </div>
+                  <div className="text-slate-500 text-xs mt-0.5">
+                    {new Date(s.created_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+                    {" • "}
+                    {new Date(s.created_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                  </div>
+                </div>
+                <button onClick={() => navigate(`/analysis?saved=${s.id}`)} data-testid={`open-saved-${s.id}`}
+                  className="shrink-0 inline-flex items-center gap-2 border border-[#1f2937] bg-[#0B0F17] hover:border-blue-500/40 text-slate-200 text-sm font-medium px-3.5 py-2 rounded-xl transition-colors">
+                  Open
+                </button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
       {snaps.length === 0 ? (
         <Card className="p-12 text-center" testid="history-empty">

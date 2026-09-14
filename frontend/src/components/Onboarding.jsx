@@ -30,7 +30,6 @@ export default function Onboarding({ onClose }) {
   const addCompRow = () => setComps((prev) => (prev.length >= MAX_COMPS ? prev : [...prev, { company_name: "", industry: "SaaS", website: "" }]));
   const removeCompRow = (i) => setComps((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)));
 
-  const dismiss = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); };
   const finishTo = (path) => { localStorage.setItem("ciq_onb_done", "1"); onClose(); navigate(path); };
   const finish = () => finishTo("/");
 
@@ -102,9 +101,6 @@ export default function Onboarding({ onClose }) {
             </div>
             <span className="font-heading font-bold text-slate-50">Get set up in 3 steps</span>
           </div>
-          <button onClick={dismiss} disabled={busy} data-testid="onboarding-skip" className="text-slate-500 hover:text-slate-300 disabled:opacity-40 text-sm inline-flex items-center gap-1">
-            Skip <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="flex items-center gap-2 px-7 mt-5 relative">
@@ -143,9 +139,6 @@ export default function Onboarding({ onClose }) {
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 <button onClick={() => setStep(1)} data-testid="onboarding-start" className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
                   Set up my product <ArrowRight className="w-4 h-4" />
-                </button>
-                <button onClick={dismiss} data-testid="onboarding-explore-demo" className="inline-flex items-center justify-center gap-2 border border-[#374151] hover:border-slate-500 text-slate-300 text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
-                  Explore the demo first
                 </button>
               </div>
             </div>
