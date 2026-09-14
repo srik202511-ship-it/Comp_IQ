@@ -48,3 +48,14 @@ data-reliability labeling (Confirmed / AI-inferred / Not publicly available), no
 
 ## Next Tasks
 - Gather user feedback on demo; prioritize export + refresh-history if requested.
+
+## Apples-to-Apples CI Engine (2026-07) — CI_SCORE_V1
+- Added an explainable engine with TWO mathematically independent scores:
+  - Comparability (0-100): 8 weighted dims (category .20, subcategory .10, use_case .20, segment .15, geo .10, tier .15, biz_model .05, buyer .05) + mandatory rejection when category/subcategory/use_case < 40.
+  - Competitive Score (0-100): 7 weighted dims (capability .35, price_value .20, fit .15, ux .10, ai .10, integration .05, security .05); UNKNOWN/non-comparable dims excluded and weights re-normalized (data_coverage + confidence reported). Comparability is NEVER an input.
+- Deterministic modules: backend/ci_engine/{taxonomy,fx,engine,pricing,prompts,assemble}.py. LLM (GPT-5.4) only for extraction/classification/feature-mapping (evidence required, UNKNOWN != NO, no fabricated pricing) + insights narrative.
+- Live FX via open.er-api.com (keyless) -> INR, with static fallback. Pricing normalized to INR annual-equivalent; custom/contact-sales never invented.
+- API: GET /api/analysis, POST /api/analysis/run {competitor_ids?, mode:normal|exploratory}. Persisted in ci_analyses.
+- Demo dataset upgraded: NimbusIQ vs Datadog/Dynatrace/New Relic (comparable) + HubSpot CRM (NOT COMPARABLE -> competitive NOT_CALCULATED). Precomputed via demo_ci.py through the real engine.
+- Frontend: new /analysis page (nav 'Apples-to-Apples' + button on Competitors) with two separate score cards, comparability breakdown, 2x2 matrix, competitive-only radar, value-for-money scatter, ranking, metric-level table, canonical feature comparison w/ evidence, normalized pricing, gaps, AI insights (Defend/Close/Differentiate/Investigate), evidence tab, tooltips, disclaimer.
+- Verified: backend testing agent (score independence, NOT COMPARABLE gate, UNKNOWN re-normalization, live Datadog run) + frontend testing agent (full demo flow incl. HubSpot NOT CALCULATED). No regressions to existing pages.

@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Plus, Loader2, Play, RefreshCw, Trash2, Eye, ExternalLink, Building2,
+  Plus, Loader2, Play, RefreshCw, Trash2, Eye, ExternalLink, Building2, Scale,
 } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { useData } from "../context/DataContext";
@@ -17,6 +18,7 @@ export default function Competitors() {
   const { competitors, refresh } = useData();
   const [busyId, setBusyId] = useState(null);
   const [viewComp, setViewComp] = useState(null);
+  const navigate = useNavigate();
 
   const analyze = async (id) => {
     setBusyId(id);
@@ -45,7 +47,15 @@ export default function Competitors() {
       <PageHeader
         title="Competitors"
         subtitle="Add competitors, crawl their sites and run AI analysis. Analyzed competitors feed every dashboard view."
-        right={<AddCompetitorDialog onAdded={refresh} />}
+        right={
+          <div className="flex items-center gap-2.5">
+            <button onClick={() => navigate("/analysis")} data-testid="goto-analysis-btn"
+              className="inline-flex items-center gap-2 border border-blue-500/40 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+              <Scale className="w-4 h-4" /> Run Apples-to-Apples Analysis
+            </button>
+            <AddCompetitorDialog onAdded={refresh} />
+          </div>
+        }
       />
 
       <Card className="p-0 overflow-hidden" testid="competitors-table">

@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, Building2, GitCompare, Lightbulb, Grid2X2, Settings,
-  LogOut, Radar as RadarIcon, Menu, X, Sparkles,
+  LogOut, Radar as RadarIcon, Menu, X, Sparkles, Scale,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -11,6 +11,7 @@ import Onboarding from "./Onboarding";
 const NAV = [
   { to: "/", label: "Dashboard", Icon: LayoutDashboard, end: true },
   { to: "/competitors", label: "Competitors", Icon: Building2 },
+  { to: "/analysis", label: "Apples-to-Apples", Icon: Scale },
   { to: "/compare", label: "Compare", Icon: GitCompare },
   { to: "/insights", label: "AI Insights", Icon: Lightbulb },
   { to: "/swot", label: "SWOT Matrix", Icon: Grid2X2 },
