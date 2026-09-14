@@ -25,6 +25,8 @@ from pydantic import BaseModel, EmailStr, Field
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 import demo_data
+import demo_ci
+from ci_engine import assemble, prompts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("competeiq")
@@ -319,13 +321,25 @@ async def seed_user_data(user_id: str):
     comp = {**demo_data.DEMO_COMPANY, "id": str(uuid.uuid4()), "user_id": user_id,
             "scores": demo_data.demo_company_scores(), "is_demo": True}
     await db.company.insert_one(comp)
+    comp_docs = []
     for c in demo_data.DEMO_COMPETITORS:
         doc = {**c, "id": str(uuid.uuid4()), "user_id": user_id,
                "last_analyzed": datetime.now(timezone.utc).isoformat(),
                "created_at": datetime.now(timezone.utc).isoformat()}
         await db.competitors.insert_one(doc)
+        comp_docs.append(doc)
     ins = {**demo_data.DEMO_INSIGHTS, "id": str(uuid.uuid4()), "user_id": user_id}
     await db.insights.insert_one(ins)
+    # Pre-compute the Apples-to-Apples CI report for the demo dataset
+    try:
+        report = demo_ci.build_demo_report(comp, comp_docs)
+        report.update({"id": str(uuid.uuid4()), "user_id": user_id,
+                       "generated_at": datetime.now(timezone.utc).isoformat()})
+        for d in ("_id",):
+            report.pop(d, None)
+        await db.ci_analyses.insert_one(report)
+    except Exception as e:
+        logger.error(f"[seed] demo CI report failed: {e}")
 
 
 def clean(doc):
@@ -516,8 +530,99 @@ async def reset_demo(user: dict = Depends(get_current_user)):
     await db.company.delete_many({"user_id": user["id"]})
     await db.competitors.delete_many({"user_id": user["id"]})
     await db.insights.delete_many({"user_id": user["id"]})
+    await db.ci_analyses.delete_many({"user_id": user["id"]})
     await seed_user_data(user["id"])
     return {"message": "Demo data reloaded"}
+
+
+# ----------------------------- Apples-to-Apples CI Engine -----------------------------
+class AnalysisRunBody(BaseModel):
+    competitor_ids: Optional[List[str]] = None
+    mode: str = "normal"  # normal | exploratory
+
+
+async def classify_our_product(company: dict) -> dict:
+    """LLM-assisted structured profile of our own product (classification + dims + features + pricing)."""
+    return await ai_json(prompts.our_profile_system(), prompts.our_profile_prompt(company))
+
+
+@api_router.get("/analysis")
+async def get_analysis(user: dict = Depends(get_current_user)):
+    return clean(await db.ci_analyses.find_one({"user_id": user["id"]}, sort=[("generated_at", -1)]))
+
+
+@api_router.post("/analysis/run")
+async def run_analysis(body: AnalysisRunBody, user: dict = Depends(get_current_user)):
+    company = await db.company.find_one({"user_id": user["id"]})
+    if not company:
+        raise HTTPException(status_code=400, detail="Set up your company profile first.")
+
+    query = {"user_id": user["id"]}
+    if body.competitor_ids:
+        query["id"] = {"$in": body.competitor_ids}
+    competitors = await db.competitors.find(query).to_list(50)
+    if not competitors:
+        raise HTTPException(status_code=400, detail="Add at least one competitor first.")
+
+    mode = "exploratory" if body.mode == "exploratory" else "normal"
+
+    # 1) Classify our product
+    try:
+        our_extracted = await classify_our_product(company)
+    except Exception as e:
+        logger.error(f"CI our-product classification failed: {e}")
+        raise HTTPException(status_code=502, detail="AI classification of your product failed. Please retry.")
+    our_block = assemble.build_our_block(company, our_extracted)
+
+    # 2) Analyze each competitor (scrape + single LLM extraction)
+    comp_blocks, errors = [], []
+    for comp in competitors:
+        try:
+            scraped = scrape_website(comp.get("website", ""))
+            if not scraped["ok"]:
+                errors.append({"competitor": comp.get("company_name"), "reason": "Could not retrieve website data."})
+                continue
+            extracted = await ai_json(
+                prompts.competitor_system(),
+                prompts.competitor_prompt(our_block.get("classification", {}), comp, scraped.get("text", "")),
+            )
+            comp_blocks.append(assemble.build_competitor_block(our_block, comp, extracted, mode=mode))
+        except Exception as e:
+            logger.error(f"CI competitor analyze failed for {comp.get('company_name')}: {e}")
+            errors.append({"competitor": comp.get("company_name"), "reason": "AI analysis failed."})
+
+    if not comp_blocks:
+        raise HTTPException(status_code=502, detail="Analysis failed for all competitors. Please retry.")
+
+    # 3) Assemble deterministic report
+    report = assemble.assemble_report(our_block, comp_blocks, mode=mode)
+    report["errors"] = errors
+
+    # 4) AI strategic insights (references computed numbers)
+    try:
+        report["insights"] = await ai_json(
+            prompts.insights_system(),
+            prompts.insights_prompt(assemble.summarize_for_insights(report)),
+        )
+    except Exception as e:
+        logger.error(f"CI insights failed: {e}")
+        report["insights"] = {"executive_summary": "", "defend": [], "close_the_gap": [],
+                              "differentiate": [], "investigate": []}
+
+    from ci_engine.taxonomy import DISCLAIMER
+    report["disclaimer"] = DISCLAIMER
+    report["is_demo"] = False
+
+    # 5) Persist (replace latest for this user)
+    existing = await db.ci_analyses.find_one({"user_id": user["id"]})
+    report.update({"user_id": user["id"], "generated_at": datetime.now(timezone.utc).isoformat()})
+    if existing:
+        report["id"] = existing["id"]
+        await db.ci_analyses.update_one({"user_id": user["id"]}, {"$set": report})
+    else:
+        report["id"] = str(uuid.uuid4())
+        await db.ci_analyses.insert_one(report)
+    return clean(await db.ci_analyses.find_one({"user_id": user["id"]}))
 
 
 app.include_router(api_router)

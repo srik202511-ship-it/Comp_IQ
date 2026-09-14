@@ -105,6 +105,20 @@
 user_problem_statement: "User cannot log in with the demo credentials (demo@competeiq.ai / demo1234)."
 
 backend:
+  - task: "Apples-to-Apples CI Engine (two independent scores) + /api/analysis endpoints"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/ci_engine/*, backend/demo_ci.py, backend/demo_data.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added an explainable CI engine with TWO independent scores: (A) Apples-to-Apples Comparability (0-100, 8 weighted dims + mandatory rejection when category/subcategory/use_case <40) and (B) Competitive Score (0-100, 7 weighted dims, excludes UNKNOWN/non-comparable dims and re-normalizes weights, with data_coverage + confidence). Comparability is NEVER an input to Competitive Score. New endpoints: GET /api/analysis (returns latest stored report) and POST /api/analysis/run {competitor_ids?, mode:normal|exploratory}. Live run does scrape + 1 GPT-5.4 extraction per competitor + deterministic scoring + AI insights. Demo dataset upgraded: precomputed CI report seeded into ci_analyses (NimbusIQ vs Datadog/Dynatrace/New Relic = comparable; HubSpot CRM = NOT COMPARABLE, competitive NOT_CALCULATED). Verified locally: score independence (comparability 60->90 keeps competitive 92), UNKNOWN exclusion re-normalizes coverage to 85%, HubSpot rejected. Demo user data was wiped so it reseeds with the CI report on next login."
+        -working: true
+        -agent: "testing"
+        -comment: "ALL TESTS PASSED ✅. Comprehensive testing of Apples-to-Apples CI Engine completed successfully. (1) GET /api/analysis returns valid precomputed CI report with our_product.competitive_score.score=76 and 7 dimensions (product_capability, price_value, customer_fit, ux, ai, integration, security) - NO 'comparability' dimension ✅. (2) competitors[] has 4 entries: Datadog (comparability=90, competitive_score=83), Dynatrace (comparability=82, competitive_score=80), New Relic (comparability=88, competitive_score=77) all have is_comparable=true with numeric competitive scores ✅. HubSpot (comparability=37, is_comparable=false, competitive_score=null) with reason 'Insufficient comparability — Insufficient match on: Category, Subcategory, Primary Buyer' ✅. (3) Each competitor's comparability has 8 dimensions (category, subcategory, use_case, customer_segment, geography, product_tier, business_model, primary_buyer) ✅. (4) Report sections verified: matrix[], radar (dimensions: Product Capability, Price/Value, Customer Fit, UX/Experience, AI Capability, Integration, Security - NO Comparability ✅), value_for_money[], ranking[] (sorted by competitive_score desc ✅), insights (defend, close_the_gap, differentiate, investigate, executive_summary ✅), disclaimer ✅. (5) Score independence structurally verified: competitive_score.dimensions never contains comparability field ✅. (6) Live run POST /api/analysis/run with Datadog ID completed in 31.4s, returned valid report with Datadog block containing comparability (84) and competitive_score (90) ✅. (7) Regression tests: GET /api/company (NimbusIQ ✅), GET /api/competitors (4 including HubSpot ✅), GET /api/insights (legacy insights ✅), POST /api/reset-demo (✅), GET /api/analysis after reset (CI report repopulated with 4 competitors ✅). No critical issues found. All requirements met."
   - task: "Demo credentials login"
     implemented: true
     working: true
@@ -115,16 +129,16 @@ backend:
     status_history:
         -working: "NA"
         -agent: "main"
-        -comment: "Root cause: backend/.env and frontend/.env were missing so backend crashed on startup (KeyError MONGO_URL) and login failed entirely. Additionally, the demo user account was never created by any code (only the 'Use demo' button pre-fills the fields). Fix: recreated both .env files and added idempotent ensure_demo_user() on startup that creates demo@competeiq.ai/demo1234 and seeds its dataset. Verified in DB: demo user exists with 1 company + 3 competitors. Needs testing agent to confirm POST /api/auth/login with demo creds returns a token and protected routes work."
+        -comment: "Fix: recreated both .env files and added idempotent ensure_demo_user() on startup."
         -working: true
         -agent: "testing"
-        -comment: "✅ ALL TESTS PASSED. Comprehensive backend testing completed via backend_test.py. Results: (1) POST /api/auth/login with demo@competeiq.ai/demo1234 returns 200 with access_token and user object ✅ (2) GET /api/auth/me with token returns demo user ✅ (3) GET /api/company returns NimbusIQ Observability Cloud profile ✅ (4) GET /api/competitors returns 3 seeded competitors (Datadog, Dynatrace, New Relic) all with status 'Analyzed' ✅ (5) GET /api/insights returns seeded insights report with executive_summary and feature_matrix ✅ (6) POST /api/auth/login with wrong password correctly returns 401 ✅ (7) POST /api/auth/register with new random user returns token and seeds demo data (NimbusIQ + 3 competitors) ✅. Demo credentials login fix is fully working."
+        -comment: "ALL TESTS PASSED. Demo login + protected routes + negative test + fresh registration all working."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
-  run_ui: true
+  test_sequence: 4
+  run_ui: false
 
 frontend:
   - task: "End-to-end user access (demo login, new signup, returning user) with dashboard redirect"
@@ -135,12 +149,9 @@ frontend:
     priority: "high"
     needs_retesting: false
     status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: "frontend/.env (REACT_APP_BACKEND_URL) was missing so the app could not reach the backend; recreated and frontend restarted. Manual screenshot confirms demo login now redirects to dashboard. Needs full E2E verification of demo login, new signup, and returning-user (logout then login again) flows, all redirecting to the dashboard."
         -working: true
         -agent: "testing"
-        -comment: "✅ ALL E2E AUTH TESTS PASSED. Comprehensive UI testing completed via Playwright. Results: (1) DEMO LOGIN: 'Try the demo' button correctly prefills demo@competeiq.ai/demo1234, login successful, redirected to dashboard at '/', dashboard loads with navigation, company data (NimbusIQ), competitive scores (78/100 overall, 8.2/10 price, 67% feature strength), 3 analyzed competitors, pricing comparison, and AI insights visible ✅ (2) NEW SIGNUP: Created unique test user (test+1789309115@example.com), signup successful with 'Account created — demo data loaded' toast, redirected to dashboard, seeded data visible, onboarding modal appears as expected ✅ (3) RETURNING USER: Logout successful (after closing onboarding modal), redirected to /login, re-login with same credentials successful, 'Welcome back' toast shown, redirected to dashboard ✅ (4) NEGATIVE TEST: Wrong password for demo@competeiq.ai shows 'Invalid email or password' error toast, stays on /login page (no redirect) ✅. JWT token stored in localStorage under 'ciq_token'. All authentication flows working correctly. Minor note: Onboarding modal appears after login/signup and needs to be closed before accessing other UI elements (expected behavior, not a bug)."
+        -comment: "ALL E2E AUTH TESTS PASSED (demo login, signup, returning user, wrong password)."
 
 test_plan:
   current_focus: []
@@ -150,8 +161,10 @@ test_plan:
 
 agent_communication:
     -agent: "main"
-    -message: "Please test login with demo credentials demo@competeiq.ai / demo1234 via POST /api/auth/login. Confirm it returns access_token + user, then confirm the token works on GET /api/auth/me, GET /api/company, GET /api/competitors (should show seeded demo data), and GET /api/insights. Do NOT run live scrape/AI analyze endpoints (they hit external sites/LLM)."
+    -message: "Test the new Apples-to-Apples CI engine. Login as demo@competeiq.ai / demo1234 first (this reseeds demo data incl. the CI report). PRIMARY TESTS: (1) GET /api/analysis returns a report with our_product.competitive_score, a competitors[] array where Datadog/Dynatrace/New Relic have comparability.is_comparable=true and a numeric competitive_score.score, and HubSpot has comparability.is_comparable=false, competitive_score=null, and a competitive_not_calculated_reason. Confirm the report has matrix, radar (dimensions must NOT include Comparability), value_for_money, ranking, insights (defend/close_the_gap/differentiate/investigate), and disclaimer. (2) SCORE INDEPENDENCE is guaranteed in code (comparability is not an input to competitive) — verify structurally that competitive_score.dimensions has 7 keys none of which is comparability. (3) POST /api/analysis/run with body {\"competitor_ids\": [<the Datadog competitor id from GET /api/competitors>]} — this does a LIVE scrape of datadoghq.com + GPT-5.4; allow up to 90s; expect 200 with a report containing Datadog block with comparability + competitive_score. Only test ONE competitor to keep it fast. (4) Regression: GET /api/company, /api/competitors (now 4 incl HubSpot), /api/insights still work; POST /api/reset-demo works and repopulates ci_analyses. Do NOT change any code."
     -agent: "testing"
     -message: "✅ Backend testing complete. All 7 tests passed successfully. Demo credentials login (demo@competeiq.ai / demo1234) is working correctly. All protected endpoints return expected seeded data (NimbusIQ company profile, 3 analyzed competitors, insights report). Negative test (wrong password → 401) and fresh registration with data seeding also working. No critical issues found. Ready for main agent to summarize and finish."
     -agent: "testing"
     -message: "✅ E2E UI testing complete. All 4 authentication flows tested and working: (1) Demo login with prefilled credentials → dashboard redirect ✅ (2) New user signup with unique email → dashboard with seeded data ✅ (3) Logout then re-login (returning user) → dashboard redirect ✅ (4) Wrong password → error toast, stays on /login ✅. Dashboard displays full competitive intelligence data including scores, competitors (Datadog, Dynatrace, New Relic), pricing comparison, and AI insights. JWT token management working correctly. No critical issues found. All authentication requirements met. Ready for main agent to summarize and finish."
+    -agent: "testing"
+    -message: "✅ APPLES-TO-APPLES CI ENGINE TESTING COMPLETE. All 9 test scenarios passed successfully: (1) GET /api/analysis returns valid precomputed CI report with correct structure ✅ (2) our_product.competitive_score has 7 dimensions (NO comparability) ✅ (3) 4 competitors with correct comparability/competitive_score structure: Datadog/Dynatrace/New Relic comparable with numeric scores, HubSpot not comparable with null score and reason ✅ (4) Each competitor's comparability has 8 dimensions ✅ (5) Report sections (matrix, radar, value_for_money, ranking, insights, disclaimer) all present and correct ✅ (6) Radar dimensions do NOT contain 'Comparability' ✅ (7) Score independence structurally verified ✅ (8) Live run POST /api/analysis/run with Datadog works (31.4s, scrape + GPT-5.4) ✅ (9) All regression tests pass ✅. Actual scores observed: Datadog (comparability=90, competitive=83), Dynatrace (comparability=82, competitive=80), New Relic (comparability=88, competitive=77), HubSpot (comparability=37, competitive=null with reason). No critical issues found. All requirements met. Ready for main agent to summarize and finish."
