@@ -2,11 +2,12 @@ import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Play, Scale, Trophy, Info, CheckCircle2, XCircle, MinusCircle,
-  ShieldCheck, TrendingUp, Target, Search, HelpCircle, FileSearch, AlertTriangle,
+  ShieldCheck, TrendingUp, Target, Search, HelpCircle, FileSearch, AlertTriangle, Download,
 } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { PageHeader, Card, SectionTitle } from "../components/common";
 import { ComparabilityMatrix, ValueScatter, RadarComparison } from "../components/Charts";
+import { exportAnalysisPdf } from "../lib/pdfReport";
 
 const fmtINR = (v) => (v == null ? "—" : `\u20b9${Number(v).toLocaleString("en-IN")}`);
 
@@ -85,8 +86,24 @@ export default function Analysis() {
     }
   };
 
+  const downloadPdf = () => {
+    try {
+      exportAnalysisPdf(report, report.our_product?.name || "Our Product");
+      toast.success("PDF downloaded");
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not generate PDF");
+    }
+  };
+
   const RunButton = (
     <div className="flex items-center gap-2">
+      {report && (
+        <button onClick={downloadPdf} data-testid="download-pdf-btn"
+          className="inline-flex items-center gap-2 border border-[#1f2937] bg-[#111827] hover:border-blue-500/40 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+          <Download className="w-4 h-4" /> Download PDF
+        </button>
+      )}
       <select value={mode} onChange={(e) => setMode(e.target.value)} data-testid="analysis-mode"
         className="bg-[#0B0F17] border border-[#1f2937] rounded-xl px-3 py-2.5 text-slate-200 text-sm outline-none">
         <option value="normal">Normal mode</option>
