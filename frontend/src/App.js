@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Competitors from "./pages/Competitors";
 import Compare from "./pages/Compare";
 import Analysis from "./pages/Analysis";
+import History from "./pages/History";
 import Insights from "./pages/Insights";
 import Swot from "./pages/Swot";
 import Settings from "./pages/Settings";
@@ -39,6 +40,7 @@ function App() {
               <Route path="competitors" element={<Competitors />} />
               <Route path="compare" element={<Compare />} />
               <Route path="analysis" element={<Analysis />} />
+              <Route path="history" element={<History />} />
               <Route path="insights" element={<Insights />} />
               <Route path="swot" element={<Swot />} />
               <Route path="settings" element={<Settings />} />

@@ -105,6 +105,20 @@
 user_problem_statement: "User cannot log in with the demo credentials (demo@competeiq.ai / demo1234)."
 
 backend:
+  - task: "Saved Comparisons history (/api/analysis/history + snapshot on each run + demo backdated snapshots)"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/demo_ci.py, backend/ci_engine/assemble.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added history: new collection ci_history. On each POST /api/analysis/run a lightweight snapshot is appended {generated_at, mode, our.competitive_score, competitors:[{name, comparability, competitive_score, is_comparable}]}. New endpoint GET /api/analysis/history returns all snapshots for the user sorted ascending by generated_at. Demo seeding inserts 4 backdated snapshots (63/41/18/0 days ago) with our score rising over time to demonstrate the trend. reset-demo also clears ci_history. Demo data wiped to reseed. Needs testing."
+        -working: true
+        -agent: "testing"
+        -comment: "ALL TESTS PASSED ✅. Comprehensive testing of Saved Comparisons history feature completed successfully. (1) GET /api/analysis/history returns exactly 4 demo snapshots sorted ASCENDING by generated_at ✅. Each snapshot has all required fields: id, user_id, generated_at, mode, our (name + competitive_score), competitors (array with name, comparability, competitive_score, is_comparable) ✅. (2) HubSpot appears in all 4 snapshots with competitive_score=null and is_comparable=false ✅. Datadog/Dynatrace/New Relic have numeric competitive_score values ✅. (3) our.competitive_score RISES across the 4 snapshots: 67 → 70 → 73 → 76 (demo story: product improving over time) ✅. (4) POST /api/analysis/run with Datadog ID completed in 25.8s, returned valid report with Datadog entry ✅. (5) After live run, GET /api/analysis/history count increased by 1 (from 4 to 5 snapshots) - new snapshot appended, not replaced ✅. Newest snapshot's generated_at matches the run timestamp and contains Datadog entry ✅. (6) POST /api/reset-demo successfully clears and reseeds history back to 4 demo snapshots with rising score pattern ✅. (7) Regression test: GET /api/analysis still returns valid report with our_product, 4 competitors, matrix, radar, ranking, insights ✅. No critical issues found. All requirements met."
   - task: "Apples-to-Apples CI Engine (two independent scores) + /api/analysis endpoints"
     implemented: true
     working: true
@@ -137,7 +151,7 @@ backend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 5
+  test_sequence: 6
   run_ui: false
 
 frontend:
@@ -184,3 +198,5 @@ agent_communication:
     -message: "✅ APPLES-TO-APPLES CI ENGINE TESTING COMPLETE. All 9 test scenarios passed successfully: (1) GET /api/analysis returns valid precomputed CI report with correct structure ✅ (2) our_product.competitive_score has 7 dimensions (NO comparability) ✅ (3) 4 competitors with correct comparability/competitive_score structure: Datadog/Dynatrace/New Relic comparable with numeric scores, HubSpot not comparable with null score and reason ✅ (4) Each competitor's comparability has 8 dimensions ✅ (5) Report sections (matrix, radar, value_for_money, ranking, insights, disclaimer) all present and correct ✅ (6) Radar dimensions do NOT contain 'Comparability' ✅ (7) Score independence structurally verified ✅ (8) Live run POST /api/analysis/run with Datadog works (31.4s, scrape + GPT-5.4) ✅ (9) All regression tests pass ✅. Actual scores observed: Datadog (comparability=90, competitive=83), Dynatrace (comparability=82, competitive=80), New Relic (comparability=88, competitive=77), HubSpot (comparability=37, competitive=null with reason). No critical issues found. All requirements met. Ready for main agent to summarize and finish."
     -agent: "testing"
     -message: "✅ APPLES-TO-APPLES ANALYSIS PAGE UI TESTING COMPLETE. Comprehensive E2E test of the new /analysis page passed all 13 scenarios. CRITICAL VERIFICATIONS: (1) Two independent scores (Comparability & Competitive) are displayed in separate cards ✅ (2) Datadog (comparable competitor): Comparability ~90 'Highly Comparable', Competitive score ~83 (numeric) with Data coverage % and Confidence % ✅ (3) HubSpot (non-comparable): Comparability ~37 'Not Comparable' (red), Competitive card shows 'NOT CALCULATED' (NOT a fabricated numeric score) with reason mentioning insufficient comparability ✅ System correctly refuses to fabricate competitive scores for non-comparable products. ALL UI ELEMENTS VERIFIED: Navigation (sidebar + Competitors page button), page structure, methodology banner, Overview section (matrix, ranking with N/C for HubSpot, radar excluding comparability, value-for-money), competitor selector with 4 chips, competitor detail sections (comparability breakdown with 8 dimensions, competitive breakdown table, normalized pricing with INR ₹, feature comparison with evidence toggles), AI Insights (4 columns: Defend/Close/Differentiate/Investigate), Evidence section. All data-testid attributes present and functional. Onboarding modal dismissal working. Screenshot captured. No critical issues found. All requirements from review_request met. Ready for main agent to summarize and finish."
+    -agent: "testing"
+    -message: "✅ SAVED COMPARISONS HISTORY TESTING COMPLETE. All 4 test scenarios passed successfully: (1) GET /api/analysis/history returns exactly 4 demo snapshots sorted ASCENDING by generated_at with all required fields (id, user_id, generated_at, mode, our, competitors) ✅. (2) HubSpot appears in all snapshots with competitive_score=null and is_comparable=false, while Datadog/Dynatrace/New Relic have numeric competitive_score values ✅. (3) our.competitive_score RISES across the 4 snapshots: 67 → 70 → 73 → 76 (demo story: product improving over time) ✅. (4) POST /api/analysis/run with Datadog completed in 25.8s, history count increased by 1 (from 4 to 5), new snapshot appended with matching timestamp and Datadog entry ✅. (5) POST /api/reset-demo successfully clears and reseeds history back to 4 demo snapshots ✅. (6) Regression test: GET /api/analysis still returns valid report ✅. No critical issues found. All requirements met. Ready for main agent to summarize and finish."

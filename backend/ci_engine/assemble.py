@@ -178,6 +178,28 @@ def assemble_report(our_block, comp_blocks, mode="normal"):
     }
 
 
+def snapshot_from_report(report):
+    """Lightweight summary of a run for the history / trend view."""
+    ours = report.get("our_product", {})
+    return {
+        "mode": report.get("mode", "normal"),
+        "is_demo": report.get("is_demo", False),
+        "our": {
+            "name": ours.get("name", "Our Product"),
+            "competitive_score": (ours.get("competitive_score") or {}).get("score"),
+        },
+        "competitors": [
+            {
+                "name": c["name"],
+                "comparability": c["comparability"]["score"],
+                "competitive_score": (c.get("competitive_score") or {}).get("score"),
+                "is_comparable": c["comparability"]["is_comparable"],
+            }
+            for c in report.get("competitors", [])
+        ],
+    }
+
+
 def summarize_for_insights(report):
     """Compact summary passed to the insights LLM prompt."""
     def comp_summary(c):

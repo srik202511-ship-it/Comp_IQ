@@ -6,6 +6,8 @@ Built through the real engine for consistency.
 """
 from ci_engine import assemble
 from ci_engine.taxonomy import DISCLAIMER
+import copy
+from datetime import datetime, timezone, timedelta
 
 
 def _f(cat, feat, avail, cap, ev, conf=85, term=None):
@@ -227,3 +229,25 @@ def build_demo_report(company_doc, competitor_docs):
     report["disclaimer"] = DISCLAIMER
     report["errors"] = []
     return report
+
+
+def build_demo_history(report):
+    """Return backdated snapshot summaries so the trend view shows movement over time.
+
+    Story: our product has steadily improved while competitors stayed roughly flat.
+    """
+    base = assemble.snapshot_from_report(report)
+    now = datetime.now(timezone.utc)
+    # (days_ago, our_delta, competitor_delta)
+    plan = [(63, -9, +4), (41, -6, +2), (18, -3, +1), (0, 0, 0)]
+    snaps = []
+    for days_ago, our_delta, comp_delta in plan:
+        s = copy.deepcopy(base)
+        if s["our"]["competitive_score"] is not None:
+            s["our"]["competitive_score"] = max(0, s["our"]["competitive_score"] + our_delta)
+        for c in s["competitors"]:
+            if c["competitive_score"] is not None:
+                c["competitive_score"] = max(0, min(100, c["competitive_score"] + comp_delta))
+        s["generated_at"] = (now - timedelta(days=days_ago)).isoformat()
+        snaps.append(s)
+    return snaps

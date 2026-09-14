@@ -338,6 +338,10 @@ async def seed_user_data(user_id: str):
         for d in ("_id",):
             report.pop(d, None)
         await db.ci_analyses.insert_one(report)
+        # Seed backdated history snapshots so the trend view is populated
+        for snap in demo_ci.build_demo_history(report):
+            snap.update({"id": str(uuid.uuid4()), "user_id": user_id})
+            await db.ci_history.insert_one(snap)
     except Exception as e:
         logger.error(f"[seed] demo CI report failed: {e}")
 
@@ -531,6 +535,7 @@ async def reset_demo(user: dict = Depends(get_current_user)):
     await db.competitors.delete_many({"user_id": user["id"]})
     await db.insights.delete_many({"user_id": user["id"]})
     await db.ci_analyses.delete_many({"user_id": user["id"]})
+    await db.ci_history.delete_many({"user_id": user["id"]})
     await seed_user_data(user["id"])
     return {"message": "Demo data reloaded"}
 
@@ -622,7 +627,23 @@ async def run_analysis(body: AnalysisRunBody, user: dict = Depends(get_current_u
     else:
         report["id"] = str(uuid.uuid4())
         await db.ci_analyses.insert_one(report)
+    # Append a history snapshot so users can track how scores shift over time
+    try:
+        snap = assemble.snapshot_from_report(report)
+        snap.update({"id": str(uuid.uuid4()), "user_id": user["id"],
+                     "generated_at": report["generated_at"]})
+        await db.ci_history.insert_one(snap)
+    except Exception as e:
+        logger.error(f"CI history snapshot failed: {e}")
     return clean(await db.ci_analyses.find_one({"user_id": user["id"]}))
+
+
+@api_router.get("/analysis/history")
+async def get_analysis_history(user: dict = Depends(get_current_user)):
+    items = await db.ci_history.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("generated_at", 1).to_list(200)
+    return items
 
 
 app.include_router(api_router)
