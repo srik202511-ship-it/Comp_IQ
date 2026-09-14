@@ -25,7 +25,8 @@ export default function Onboarding({ onClose }) {
   const [comp, setComp] = useState({ company_name: "", industry: "SaaS", website: "" });
 
   const dismiss = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); };
-  const finish = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); navigate("/"); };
+  const finishTo = (path) => { localStorage.setItem("ciq_onb_done", "1"); onClose(); navigate(path); };
+  const finish = () => finishTo("/");
 
   const analyzeProduct = async () => {
     if (!website.trim()) { toast.error("Enter your product website"); return; }
@@ -58,12 +59,14 @@ export default function Onboarding({ onClose }) {
 
   const generateInsights = async () => {
     setBusy(true);
-    const t = toast.loading("GPT-5.4 generating your competitive report…");
+    const t = toast.loading("GPT-5.4 building your report & first apples-to-apples comparison…");
     try {
       await api.post("/insights/generate");
+      // Run the apples-to-apples comparison so it's ready when we land there
+      try { await api.post("/analysis/run", { mode: "normal" }); } catch (e) { /* non-fatal */ }
       await refresh();
-      toast.success("Your dashboard is ready", { id: t });
-      finish();
+      toast.success("Your comparison is ready", { id: t });
+      finishTo("/analysis");
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail), { id: t });
     } finally { setBusy(false); }
@@ -183,10 +186,10 @@ export default function Onboarding({ onClose }) {
               </div>
               <h2 className="font-heading text-2xl font-bold text-slate-50 mt-4">You're all set!</h2>
               <p className="text-slate-400 mt-2 text-sm max-w-md mx-auto">
-                Generate your AI competitive report to populate the dashboard with scores, SWOT, insights and recommended actions.
+                Generate your AI report and your first apples-to-apples comparison, and we will open it for you.
               </p>
               <button onClick={generateInsights} disabled={busy} data-testid="onboarding-generate" className="mt-6 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lightbulb className="w-4 h-4" />} Generate my report
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lightbulb className="w-4 h-4" />} Generate & open comparison
               </button>
               <div className="mt-3">
                 <button onClick={finish} data-testid="onboarding-finish-later" className="text-slate-500 hover:text-slate-300 text-xs">I'll do this later</button>
