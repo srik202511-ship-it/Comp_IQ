@@ -135,7 +135,7 @@ export default function Analysis() {
           <Overview report={report} />
           <CompetitorSelector report={report} selected={selected} setSelected={setSelected} />
           <CompetitorDetail report={report} name={selected} />
-          <Insights insights={report.insights} />
+          <Insights insights={report.insights} ourName={report.our_product?.name || "Our Product"} />
           <EvidenceSection report={report} />
           <Disclaimer text={report.disclaimer} />
         </>
@@ -251,10 +251,11 @@ function CompetitorDetail({ report, name }) {
   const cm = compStatusMeta(comp.comparability);
   const cs = comp.competitive_score;
   const bm = cs ? bandMeta(cs.band) : null;
+  const ourName = report.our_product?.name || "Our Product";
 
   return (
     <div className="space-y-6" data-testid="competitor-detail">
-      <SectionTitle eyebrow="Apples-to-Apples Check" title={`Our Product vs ${comp.name}`} />
+      <SectionTitle eyebrow="Apples-to-Apples Check" title={`${ourName} vs ${comp.name}`} />
 
       {/* Two independent score cards */}
       <div className="grid md:grid-cols-2 gap-6">
@@ -332,7 +333,7 @@ function CompetitorDetail({ report, name }) {
               <tr className="border-b border-[#374151] text-slate-400 font-mono text-[11px] uppercase">
                 <th className="text-left py-2">Metric</th>
                 <th className="text-center py-2">Comparability</th>
-                <th className="text-right py-2">Our</th>
+                <th className="text-right py-2">{ourName}</th>
                 <th className="text-right py-2">{comp.name}</th>
               </tr>
             </thead>
@@ -360,10 +361,10 @@ function CompetitorDetail({ report, name }) {
       {comp.gaps && <Gaps gaps={comp.gaps} name={comp.name} />}
 
       {/* Pricing */}
-      <PricingCompare our={report.our_product.pricing} comp={comp.pricing} name={comp.name} />
+      <PricingCompare our={report.our_product.pricing} comp={comp.pricing} name={comp.name} ourName={ourName} />
 
       {/* Feature comparison */}
-      <FeatureComparison rows={comp.feature_comparison} name={comp.name} />
+      <FeatureComparison rows={comp.feature_comparison} name={comp.name} ourName={ourName} />
     </div>
   );
 }
@@ -420,12 +421,12 @@ function PriceRow({ label, p, ours }) {
   );
 }
 
-function PricingCompare({ our, comp, name }) {
+function PricingCompare({ our, comp, name, ourName = "Our Product" }) {
   return (
     <div>
       <SectionTitle eyebrow="Pricing" title="Normalized Pricing" />
       <div className="grid sm:grid-cols-2 gap-4">
-        <PriceRow label="Our Product" p={our} ours />
+        <PriceRow label={ourName} p={our} ours />
         <PriceRow label={name} p={comp} />
       </div>
       <p className="text-[11px] text-slate-500 mt-2">Prices normalized to INR annual-equivalent for fair comparison. Custom / contact-sales pricing is never invented.</p>
@@ -434,7 +435,7 @@ function PricingCompare({ our, comp, name }) {
 }
 
 /* --------------------------- FEATURES --------------------------- */
-function FeatureComparison({ rows, name }) {
+function FeatureComparison({ rows, name, ourName = "Our Product" }) {
   const [open, setOpen] = useState(null);
   const capCell = (f) => {
     if (!f) return <span className="text-slate-600">—</span>;
@@ -452,7 +453,7 @@ function FeatureComparison({ rows, name }) {
           <thead>
             <tr className="border-b border-[#374151] bg-[#0B0F17] text-slate-400 font-mono text-[11px] uppercase">
               <th className="text-left py-3 px-4">Capability</th>
-              <th className="text-center py-3 px-4">Our Product</th>
+              <th className="text-center py-3 px-4">{ourName}</th>
               <th className="text-center py-3 px-4">{name}</th>
               <th className="text-left py-3 px-4">Winner</th>
               <th className="py-3 px-4"></th>
@@ -465,7 +466,7 @@ function FeatureComparison({ rows, name }) {
                   <td className="py-2.5 px-4 text-slate-200">{r.canonical_feature}<div className="text-[10px] text-slate-500">{r.category}</div></td>
                   <td className="py-2.5 px-4 text-center">{capCell(r.our)}</td>
                   <td className="py-2.5 px-4 text-center">{capCell(r.competitor)}</td>
-                  <td className={`py-2.5 px-4 capitalize font-medium ${winnerBadge(r.winner)}`}>{r.winner === "ours" ? "Our Product" : r.winner === "competitor" ? name : r.winner}</td>
+                  <td className={`py-2.5 px-4 capitalize font-medium ${winnerBadge(r.winner)}`}>{r.winner === "ours" ? ourName : r.winner === "competitor" ? name : r.winner}</td>
                   <td className="py-2.5 px-4 text-right">
                     <button onClick={() => setOpen(open === i ? null : i)} data-testid={`feat-evidence-${i}`} className="text-slate-500 hover:text-blue-400 text-xs inline-flex items-center gap-1"><FileSearch className="w-3.5 h-3.5" /> Evidence</button>
                   </td>
@@ -473,7 +474,7 @@ function FeatureComparison({ rows, name }) {
                 {open === i && (
                   <tr className="bg-[#0B0F17]/60"><td colSpan={5} className="px-4 py-3 text-xs text-slate-400">
                     <div className="grid sm:grid-cols-2 gap-3">
-                      <EvidenceCell title="Our Product" f={r.our} />
+                      <EvidenceCell title={ourName} f={r.our} />
                       <EvidenceCell title={name} f={r.competitor} />
                     </div>
                   </td></tr>
@@ -499,8 +500,9 @@ function EvidenceCell({ title, f }) {
 }
 
 /* --------------------------- INSIGHTS --------------------------- */
-function Insights({ insights }) {
+function Insights({ insights, ourName = "Our Product" }) {
   if (!insights) return null;
+  const px = (t) => (typeof t === "string" ? t.split("Our Product").join(ourName) : t);
   const block = (title, Icon, color, items) => (
     <Card className="p-5">
       <div className={`flex items-center gap-2 mb-3 ${color}`}><Icon className="w-4 h-4" /><h4 className="font-heading font-semibold">{title}</h4></div>
@@ -508,8 +510,8 @@ function Insights({ insights }) {
         {(items || []).length === 0 && <p className="text-slate-500 text-xs">No items.</p>}
         {(items || []).map((it, i) => (
           <div key={i} className="text-sm">
-            <div className="text-slate-200">{it.point}</div>
-            {it.evidence && <div className="text-slate-500 text-xs mt-0.5">{it.evidence}</div>}
+            <div className="text-slate-200">{px(it.point)}</div>
+            {it.evidence && <div className="text-slate-500 text-xs mt-0.5">{px(it.evidence)}</div>}
           </div>
         ))}
       </div>
@@ -521,7 +523,7 @@ function Insights({ insights }) {
       {insights.executive_summary && (
         <Card className="p-5 mb-4">
           <div className="font-mono text-[11px] uppercase tracking-wider text-blue-400 mb-1.5">Executive Summary</div>
-          <p className="text-slate-200 leading-relaxed">{insights.executive_summary}</p>
+          <p className="text-slate-200 leading-relaxed">{px(insights.executive_summary)}</p>
         </Card>
       )}
       <div className="grid md:grid-cols-2 gap-4">

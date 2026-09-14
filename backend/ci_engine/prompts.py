@@ -82,7 +82,10 @@ def insights_system():
 
 
 def insights_prompt(report_summary: dict) -> str:
+    our_name = (report_summary.get("our_product") or {}).get("name") or "our product"
     return f"""Given this computed competitive analysis, write strategic insights.
+
+OUR PRODUCT NAME: "{our_name}"
 
 DATA (computed scores, gaps, pricing):
 {json.dumps(report_summary, default=str)[:8000]}
@@ -95,4 +98,4 @@ Return JSON EXACTLY:
  "differentiate": [{{"point":"","evidence":""}}],
  "investigate": [{{"point":"","evidence":""}}]
 }}
-Max 3 items per list. Every point MUST reference a specific competitor name, score, price or feature from the data."""
+Max 3 items per list. Always refer to our own product by its name "{our_name}" (for example, "{our_name} holds a strong position...") \u2014 NEVER write the generic phrase "Our Product". Every point MUST reference a specific competitor name, score, price or feature from the data."""
