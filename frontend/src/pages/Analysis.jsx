@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, Fragment } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Play, Scale, Trophy, Info, CheckCircle2, XCircle, MinusCircle,
@@ -362,9 +362,6 @@ function CompetitorDetail({ report, name }) {
 
       {/* Pricing */}
       <PricingCompare our={report.our_product.pricing} comp={comp.pricing} name={comp.name} ourName={ourName} />
-
-      {/* Feature comparison */}
-      <FeatureComparison rows={comp.feature_comparison} name={comp.name} ourName={ourName} />
     </div>
   );
 }
@@ -430,71 +427,6 @@ function PricingCompare({ our, comp, name, ourName = "Our Product" }) {
         <PriceRow label={name} p={comp} />
       </div>
       <p className="text-[11px] text-slate-500 mt-2">Prices normalized to INR annual-equivalent for fair comparison. Custom / contact-sales pricing is never invented.</p>
-    </div>
-  );
-}
-
-/* --------------------------- FEATURES --------------------------- */
-function FeatureComparison({ rows, name, ourName = "Our Product" }) {
-  const [open, setOpen] = useState(null);
-  const capCell = (f) => {
-    if (!f) return <span className="text-slate-600">—</span>;
-    if (f.availability === "unknown" || f.capability_pct == null) return <span className="text-slate-500 text-xs">UNKNOWN</span>;
-    return <span className="font-mono text-slate-100">{f.capability_score}/5</span>;
-  };
-  const winnerBadge = (w) => ({
-    ours: "text-blue-300", competitor: "text-cyan-300", parity: "text-slate-400", unknown: "text-slate-600",
-  }[w]);
-  return (
-    <div>
-      <SectionTitle eyebrow="Features" title="Canonical Feature Comparison" />
-      <Card className="p-0 overflow-hidden" testid="feature-comparison">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#374151] bg-[#0B0F17] text-slate-400 font-mono text-[11px] uppercase">
-              <th className="text-left py-3 px-4">Capability</th>
-              <th className="text-center py-3 px-4">{ourName}</th>
-              <th className="text-center py-3 px-4">{name}</th>
-              <th className="text-left py-3 px-4">Winner</th>
-              <th className="py-3 px-4"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <Fragment key={r.canonical_feature}>
-                <tr className="border-b border-[#1f2937]">
-                  <td className="py-2.5 px-4 text-slate-200">{r.canonical_feature}<div className="text-[10px] text-slate-500">{r.category}</div></td>
-                  <td className="py-2.5 px-4 text-center">{capCell(r.our)}</td>
-                  <td className="py-2.5 px-4 text-center">{capCell(r.competitor)}</td>
-                  <td className={`py-2.5 px-4 capitalize font-medium ${winnerBadge(r.winner)}`}>{r.winner === "ours" ? ourName : r.winner === "competitor" ? name : r.winner}</td>
-                  <td className="py-2.5 px-4 text-right">
-                    <button onClick={() => setOpen(open === i ? null : i)} data-testid={`feat-evidence-${i}`} className="text-slate-500 hover:text-blue-400 text-xs inline-flex items-center gap-1"><FileSearch className="w-3.5 h-3.5" /> Evidence</button>
-                  </td>
-                </tr>
-                {open === i && (
-                  <tr className="bg-[#0B0F17]/60"><td colSpan={5} className="px-4 py-3 text-xs text-slate-400">
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <EvidenceCell title={ourName} f={r.our} />
-                      <EvidenceCell title={name} f={r.competitor} />
-                    </div>
-                  </td></tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-}
-
-function EvidenceCell({ title, f }) {
-  if (!f) return <div><div className="text-slate-500 font-mono text-[10px] uppercase">{title}</div><div className="text-slate-600 mt-1">No data</div></div>;
-  return (
-    <div>
-      <div className="text-slate-500 font-mono text-[10px] uppercase">{title} · conf {f.confidence}%</div>
-      <div className="text-slate-300 mt-1">{f.evidence || "No evidence text"}</div>
-      {f.source_url && <a href={f.source_url} target="_blank" rel="noreferrer" className="text-blue-400 text-[11px]">{f.source_url}</a>}
     </div>
   );
 }
