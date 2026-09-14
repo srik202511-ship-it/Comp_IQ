@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Radar, Sparkles, Building2, Lightbulb, ArrowRight, Loader2, Check, X, PartyPopper,
+  Radar, Sparkles, Building2, Lightbulb, ArrowRight, Loader2, Check, X, PartyPopper, Plus,
 } from "lucide-react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { useData } from "../context/DataContext";
@@ -10,11 +10,12 @@ import { useData } from "../context/DataContext";
 const STEPS = [
   { key: "welcome", label: "Welcome", Icon: Radar },
   { key: "product", label: "Your Product", Icon: Sparkles },
-  { key: "competitor", label: "First Competitor", Icon: Building2 },
+  { key: "competitor", label: "Competitors", Icon: Building2 },
   { key: "insights", label: "Generate Insights", Icon: Lightbulb },
 ];
 
 const INDUSTRIES = ["SaaS", "Electric Vehicles", "Consumer Electronics", "Banking", "E-commerce", "Fintech", "Healthcare", "Other"];
+const MAX_COMPS = 3;
 
 export default function Onboarding({ onClose }) {
   const { company, refresh } = useData();
@@ -22,7 +23,12 @@ export default function Onboarding({ onClose }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [website, setWebsite] = useState("");
-  const [comp, setComp] = useState({ company_name: "", industry: "SaaS", website: "" });
+  const [comps, setComps] = useState([{ company_name: "", industry: "SaaS", website: "" }]);
+  const [progress, setProgress] = useState("");
+
+  const setCompAt = (i, patch) => setComps((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const addCompRow = () => setComps((prev) => (prev.length >= MAX_COMPS ? prev : [...prev, { company_name: "", industry: "SaaS", website: "" }]));
+  const removeCompRow = (i) => setComps((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)));
 
   const dismiss = () => { localStorage.setItem("ciq_onb_done", "1"); onClose(); };
   const finishTo = (path) => { localStorage.setItem("ciq_onb_done", "1"); onClose(); navigate(path); };
@@ -42,18 +48,28 @@ export default function Onboarding({ onClose }) {
     } finally { setBusy(false); }
   };
 
-  const addAndAnalyzeCompetitor = async () => {
-    if (!comp.company_name.trim() || !comp.website.trim()) { toast.error("Enter competitor name and website"); return; }
+  const addAndAnalyzeCompetitors = async () => {
+    const valid = comps.filter((c) => c.company_name.trim() && c.website.trim());
+    if (!valid.length) { toast.error("Enter at least one competitor (name and website)"); return; }
     setBusy(true);
-    const t = toast.loading("Adding competitor & running AI analysis…");
+    const t = toast.loading(`Adding & analyzing ${valid.length} competitor${valid.length > 1 ? "s" : ""}…`);
+    let ok = 0;
     try {
-      const { data } = await api.post("/competitors", comp);
-      await api.post(`/competitors/${data.id}/analyze`);
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i];
+        setProgress(`Analyzing ${c.company_name} (${i + 1}/${valid.length})…`);
+        toast.loading(`Analyzing ${c.company_name} (${i + 1}/${valid.length})…`, { id: t });
+        try {
+          const { data } = await api.post("/competitors", c);
+          await api.post(`/competitors/${data.id}/analyze`);
+          ok++;
+        } catch (e) { /* keep going with the rest */ }
+      }
       await refresh();
-      toast.success(`${comp.company_name} analyzed`, { id: t });
+      setProgress("");
+      if (ok === 0) { toast.error("Could not analyze those competitors — check the websites and retry.", { id: t }); return; }
+      toast.success(`${ok} competitor${ok > 1 ? "s" : ""} analyzed`, { id: t });
       setStep(3);
-    } catch (err) {
-      toast.error(formatApiErrorDetail(err.response?.data?.detail), { id: t });
     } finally { setBusy(false); }
   };
 
@@ -152,29 +168,41 @@ export default function Onboarding({ onClose }) {
 
           {step === 2 && (
             <div data-testid="onboarding-competitor">
-              <StepHead Icon={Building2} title="Add your first competitor" subtitle={`Comparing against ${company?.company_name || "your product"}. We'll scrape their site and score them.`} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
-                <div>
-                  <label className="block text-slate-300 text-xs font-medium mb-1.5">Competitor name</label>
-                  <input value={comp.company_name} onChange={(e) => setComp({ ...comp, company_name: e.target.value })} placeholder="Acme Inc." data-testid="onboarding-comp-name"
-                    className="w-full bg-[#0B0F17] border border-[#1f2937] focus:border-blue-500/60 rounded-xl px-4 py-3 text-slate-100 text-sm outline-none placeholder:text-slate-600" />
-                </div>
-                <div>
-                  <label className="block text-slate-300 text-xs font-medium mb-1.5">Industry</label>
-                  <select value={comp.industry} onChange={(e) => setComp({ ...comp, industry: e.target.value })} data-testid="onboarding-comp-industry"
-                    className="w-full bg-[#0B0F17] border border-[#1f2937] focus:border-blue-500/60 rounded-xl px-3 py-3 text-slate-100 text-sm outline-none">
-                    {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
-                  </select>
-                </div>
+              <StepHead Icon={Building2} title="Add competitors" subtitle={`Comparing against ${company?.company_name || "your product"}. Add up to ${MAX_COMPS} for a richer first comparison — we'll scrape and score each.`} />
+              <div className="mt-6 space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                {comps.map((c, i) => (
+                  <div key={i} className="rounded-xl border border-[#1f2937] bg-[#0B0F17] p-3" data-testid={`onboarding-comp-row-${i}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-slate-400 text-xs font-mono uppercase tracking-wider">Competitor {i + 1}</span>
+                      {comps.length > 1 && (
+                        <button onClick={() => removeCompRow(i)} disabled={busy} data-testid={`onboarding-comp-remove-${i}`}
+                          className="text-slate-500 hover:text-rose-400 disabled:opacity-40"><X className="w-4 h-4" /></button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input value={c.company_name} onChange={(e) => setCompAt(i, { company_name: e.target.value })} placeholder="Acme Inc." data-testid={`onboarding-comp-name-${i}`}
+                        className="w-full bg-[#111827] border border-[#1f2937] focus:border-blue-500/60 rounded-lg px-3 py-2.5 text-slate-100 text-sm outline-none placeholder:text-slate-600" />
+                      <select value={c.industry} onChange={(e) => setCompAt(i, { industry: e.target.value })} data-testid={`onboarding-comp-industry-${i}`}
+                        className="w-full bg-[#111827] border border-[#1f2937] focus:border-blue-500/60 rounded-lg px-3 py-2.5 text-slate-100 text-sm outline-none">
+                        {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
+                      </select>
+                    </div>
+                    <input value={c.website} onChange={(e) => setCompAt(i, { website: e.target.value })} placeholder="https://competitor.com" data-testid={`onboarding-comp-website-${i}`}
+                      className="w-full bg-[#111827] border border-[#1f2937] focus:border-blue-500/60 rounded-lg px-3 py-2.5 text-slate-100 text-sm outline-none placeholder:text-slate-600 mt-2" />
+                  </div>
+                ))}
               </div>
-              <label className="block text-slate-300 text-xs font-medium mb-1.5 mt-3">Competitor website</label>
-              <input value={comp.website} onChange={(e) => setComp({ ...comp, website: e.target.value })} placeholder="https://competitor.com" data-testid="onboarding-comp-website"
-                className="w-full bg-[#0B0F17] border border-[#1f2937] focus:border-blue-500/60 rounded-xl px-4 py-3 text-slate-100 text-sm outline-none placeholder:text-slate-600" />
-              <div className="flex items-center gap-3 mt-6">
-                <button onClick={addAndAnalyzeCompetitor} disabled={busy} data-testid="onboarding-add-competitor" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />} Analyze competitor
+              {comps.length < MAX_COMPS && (
+                <button onClick={addCompRow} disabled={busy} data-testid="onboarding-comp-add-row"
+                  className="mt-3 inline-flex items-center gap-1.5 text-blue-300 hover:text-blue-200 disabled:opacity-40 text-sm font-medium">
+                  <Plus className="w-4 h-4" /> Add another competitor
                 </button>
-                <span className="text-slate-500 text-xs">Takes ~30-60s</span>
+              )}
+              <div className="flex items-center gap-3 mt-5">
+                <button onClick={addAndAnalyzeCompetitors} disabled={busy} data-testid="onboarding-add-competitor" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />} Analyze competitors
+                </button>
+                <span className="text-slate-500 text-xs">{busy && progress ? progress : "~30-60s each"}</span>
               </div>
             </div>
           )}
