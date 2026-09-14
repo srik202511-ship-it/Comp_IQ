@@ -1,57 +1,81 @@
-# Plan: Fix "comparison failing" (competitor analysis errors)
+# Plan: Policy-aware, tiered web data acquisition layer
 
-## What's happening now
-On the Competitors page, some competitors finish with **Analyzed** (e.g. BYD) while others show
-**Error** (e.g. Tesla, Toyota). "Error" happens when the app fetches the competitor's website but
-the site blocks automated access or returns no usable text. Large consumer sites (tesla.com,
-toyota.com, etc.) commonly do this. When that happens today the competitor is marked Error with a
-generic message, and it contributes nothing to the comparison.
+## Goal
+Replace the current single-shot website fetch with a responsible, multi-tier crawler that gathers
+publicly available competitor information, renders JavaScript pages when needed, detects when a site
+restricts automated access, and always keeps the analysis running on whatever was legitimately
+obtained. It will never attempt to defeat security controls (CAPTCHA, bot challenges, auth,
+paywalls, IP/fingerprint evasion, robots.txt circumvention).
 
-Two distinct things are going on:
-1. **Website fetch failures** for protected sites → the real cause of the red "Error".
-2. **Mismatched comparison** (Postman vs car brands) → the engine will correctly label these
-   "NOT COMPARABLE". This is expected behaviour, not a bug, and will be made clearer.
+This crawler becomes the shared data source for both "Analyze competitor" and the Apples-to-Apples
+comparison run.
 
-## What will change
+## What will be built
 
-### 1. Make website fetching more resilient
-- Send realistic browser-style request headers, follow redirects, use a longer timeout, and retry
-  once before giving up.
-- If a specific page path fails (e.g. `/pricing`, `/features`, or a deep URL like
-  `toyota.com.au/bz4x-ev`), fall back to the site's home page so partial content can still be read.
-- Result: several sites that fail today will succeed. Some heavily protected sites may still block
-  automated access — no tool can guarantee otherwise without violating their terms.
+### Tiered acquisition
+- **Tier 1 – HTTP fetch:** improved standard retrieval (browser-style headers, redirects, robots.txt
+  check, content-type/size validation, retry with backoff). Extracts titles, headings, product/
+  feature/pricing/spec/FAQ text and relevant links.
+- **Tier 2 – Browser rendering:** when a page needs JavaScript, render it in a real browser and read
+  the public content — handling cookie banners, tabs/accordions, lazy-loaded sections, pagination,
+  and incremental scrolling, at a normal human pace with pauses. Interaction is for usability and
+  responsible pacing only, never to evade detection.
+- **Focused crawl:** only follow a small number of relevant pages (pricing, products, features,
+  specs, plans, FAQ, docs), not the whole site, with conservative limits and URL de-duplication.
 
-### 2. Clear, honest errors instead of a blank "Error"
-- When a site genuinely can't be read, show a plain-language reason (e.g. "This site blocked
-  automated access" or "No readable content found") on the competitor row and in the analysis run.
-- Keep the existing **Analyze/Retry** action so the user can try again.
-- The Apples-to-Apples run continues with whatever competitors did succeed, and lists the ones that
-  couldn't be analyzed with their reason, rather than failing the whole run.
+### Restriction detection & safe fallback
+- Classify each fetch into a clear status: ACCESSIBLE, JAVASCRIPT_REQUIRED, PARTIALLY_ACCESSIBLE,
+  ROBOTS_RESTRICTED, RATE_LIMITED, AUTHENTICATION_REQUIRED, CAPTCHA_OR_BOT_CHALLENGE, ACCESS_DENIED,
+  TIMEOUT, SITE_ERROR, UNKNOWN.
+- On an explicit restriction (bot challenge, auth, access denied): **stop immediately, do not retry,
+  attempt no bypass**, and show the user a clear message. On HTTP 429: respect Retry-After. On
+  temporary errors: a few backoff retries only.
+- Legitimate fallbacks offered to the user: **paste page content / provide a specific URL** so the
+  competitor can still be analyzed from user-supplied material (clearly labelled as such).
 
-### 3. Manual details fallback for blocked sites
-- For any competitor that can't be crawled, let the user **paste a short description / key details**
-  (what the product is, pricing, notable features) as an alternative source. The AI then analyzes
-  that text instead of the website, so the competitor can still be scored.
-- Anything derived this way is clearly marked as coming from user-provided info (not the live site),
-  keeping the "no fabricated data" principle intact.
+### Evidence & provenance
+- Every extracted data point keeps its source: competitor, source URL, domain, page title,
+  retrieval time, acquisition method (http / browser_rendered / user_provided), content type,
+  extraction status, and a confidence score.
+- Evidence-first: if a fact isn't found in the collected sources it is recorded as "Not found",
+  never guessed. This feeds the existing Evidence/Data-Quality view.
 
-### 4. Make "NOT COMPARABLE" obvious for mismatched inputs
-- When the chosen competitors are a different category from the product (e.g. Postman vs car
-  brands), the result already reads NOT COMPARABLE. A short note will make clear this is a
-  legitimate outcome (the products aren't a fair benchmark), not an error.
+### Dashboard & UX
+- Each competitor row shows a **data-collection status**: green collected, yellow partial, blue
+  JavaScript-rendered, orange some pages unavailable, red site restricts automated access — plus
+  last successful crawl, pages analyzed, sources used, extraction confidence, and any failed pages.
+- Failures are never shown as a bare "Scraping failed." They explain what happened and offer
+  actions: **View Sources · Retry Later · Provide Page Manually**.
+- The comparison continues using all competitors that succeeded; missing competitors/data are
+  clearly marked unavailable rather than blocking the run.
+
+### Logging
+- Structured per-URL crawl logs (timestamp, competitor, URL, status, method, classification,
+  success/failure + reason, retry count, confidence) for transparency and debugging.
 
 ## Decisions / assumptions
-- **Assumption:** Keep using the built-in crawler (improved as above). No paid third-party scraping
-  service is added. That would raise reliability on protected sites but needs an external account /
-  key and cost — can be added later if desired.
-- **Assumption:** The manual-details fallback (item 3) is included, because it's the only reliable
-  way to get past sites that permanently block crawling.
-- **Assumption:** No change to how scores are calculated; this is purely about getting data in and
-  reporting failures clearly.
+- **Compliance (fixed):** no anti-bot, CAPTCHA, auth, paywall, or access-control bypass of any kind;
+  restrictions are detected and respected. This is a hard boundary of the design.
+- **Assumption – browser engine in the backend:** Tier 2 uses Playwright with a headless Chromium
+  installed into the backend. This adds a large dependency and makes crawls noticeably slower
+  (seconds per rendered page). See open question — if the hosting container can't run it, Tier 2 is
+  skipped and the system runs on Tier 1 + manual fallback.
+- **Assumption – crawls run in the background:** because multi-page rendered crawls can take up to a
+  minute or two per competitor, analysis runs as a background job and the competitor row updates its
+  status live, instead of the user waiting on a frozen button.
+- **Assumption – conservative default limits:** ~8 pages per competitor, depth 2, ~12 requests per
+  domain, ~90s max runtime per competitor, ~3 MB max page size. Tunable later.
+- **Assumption – manual fallback = paste text / provide URL** (no PDF/file upload in this round;
+  can be added later if wanted).
+- **Assumption – no paid scraping/proxy/anti-bot service** is used (consistent with the earlier
+  decision). Heavily protected sites (e.g. some large consumer brands) may therefore remain
+  uncollectable, which the UI will state plainly.
+- **Assumption – scoring logic unchanged:** this work only changes how evidence is gathered and how
+  status is reported; the comparability and competitive scoring stay as-is.
 
 ## Open question
-- Some very large sites (Tesla, Toyota) may still block automated access even after the improvements
-  in item 1. Is the **manual-details fallback (item 3)** an acceptable way to handle those, or is a
-  paid scraping service preferred despite the added cost and setup? (Default if no answer: ship items
-  1, 2 and 3; skip the paid service.)
+- **Browser rendering in the backend:** proceed with installing Playwright + headless Chromium for
+  Tier 2 (heavier, slower, more memory), or keep the backend HTTP-only (Tier 1 improvements +
+  restriction detection + manual fallback) and rely on manual paste for JavaScript-only sites?
+  Default if no answer: attempt to enable Tier 2 browser rendering, and automatically fall back to
+  Tier 1 + manual paste if the environment cannot support a browser.

@@ -26,6 +26,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 import demo_data
 import demo_ci
+import crawler
 from ci_engine import assemble, prompts
 
 logging.basicConfig(level=logging.INFO)
@@ -165,6 +166,22 @@ def scrape_website(url: str) -> dict:
         except Exception as e:
             logger.info(f"scrape fail {p}: {e}")
     return {"ok": ok, "title": title, "text": " ".join(collected)[:9000]}
+
+def collection_meta(result: dict) -> dict:
+    """Compact per-competitor data-collection record for the dashboard."""
+    return {
+        "status": result.get("overall_status", "UNKNOWN"),
+        "restricted": result.get("restricted", False),
+        "message": result.get("message", ""),
+        "last_crawl": result.get("collected_at"),
+        "pages_analyzed": result.get("pages_analyzed", 0),
+        "sources_used": result.get("sources_used", 0),
+        "extraction_confidence": result.get("extraction_confidence", 0),
+        "sources": result.get("pages", []),
+        "failed_pages": result.get("failed_pages", []),
+    }
+
+
 
 
 async def ai_json(system: str, prompt: str) -> dict:
@@ -415,11 +432,11 @@ class CompanyAnalyzeBody(BaseModel):
 
 @api_router.post("/company/analyze")
 async def analyze_company(body: CompanyAnalyzeBody, user: dict = Depends(get_current_user)):
-    scraped = scrape_website(body.website)
-    if not scraped["ok"]:
-        raise HTTPException(status_code=422, detail=f"Could not retrieve website data for {body.website}. Please check the URL and retry.")
+    result = await crawler.acquire(body.website)
+    if not result["ok"]:
+        raise HTTPException(status_code=422, detail=result.get("message") or f"Could not retrieve website data for {body.website}. Please check the URL and retry.")
     try:
-        profile = await ai_json(COMPANY_SYSTEM, company_prompt(body.website, scraped))
+        profile = await ai_json(COMPANY_SYSTEM, company_prompt(body.website, result))
     except Exception as e:
         logger.error(f"company analyze AI error: {e}")
         raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
@@ -473,21 +490,60 @@ async def analyze_competitor(comp_id: str, user: dict = Depends(get_current_user
     if not comp:
         raise HTTPException(status_code=404, detail="Competitor not found")
     our = await db.company.find_one({"user_id": user["id"]}) or {}
-    scraped = scrape_website(comp.get("website", ""))
-    if not scraped["ok"]:
-        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": "Error"}})
-        raise HTTPException(status_code=422, detail=f"Could not retrieve website data for {comp.get('website')}. Please check the URL and retry.")
+    result = await crawler.acquire(comp.get("website", ""), comp.get("company_name", ""))
+    meta = collection_meta(result)
+    now = datetime.now(timezone.utc).isoformat()
+    if not result["ok"]:
+        status = "Restricted" if result.get("restricted") else "Error"
+        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": status, "data_collection": meta, "last_analyzed": now}})
+        raise HTTPException(status_code=422, detail=result.get("message") or f"Could not collect public data for {comp.get('website')}.")
     try:
-        analysis = await ai_json(ANALYZE_SYSTEM, analyze_prompt(comp, scraped, our))
+        analysis = await ai_json(ANALYZE_SYSTEM, analyze_prompt(comp, result, our))
     except Exception as e:
         logger.error(f"analyze AI error: {e}")
-        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": "Error"}})
+        await db.competitors.update_one({"id": comp_id}, {"$set": {"status": "Error", "data_collection": meta}})
         raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
-    analysis["collected_at"] = datetime.now(timezone.utc).isoformat()
+    analysis["collected_at"] = now
     await db.competitors.update_one(
         {"id": comp_id},
         {"$set": {"analysis": analysis, "status": "Analyzed", "is_demo": False,
-                  "last_analyzed": datetime.now(timezone.utc).isoformat()}},
+                  "data_collection": meta, "last_analyzed": now}},
+    )
+    return clean(await db.competitors.find_one({"id": comp_id}))
+
+
+class ManualContentBody(BaseModel):
+    text: Optional[str] = None
+    url: Optional[str] = None
+
+
+@api_router.post("/competitors/{comp_id}/manual")
+async def provide_manual_content(comp_id: str, body: ManualContentBody, user: dict = Depends(get_current_user)):
+    """Legitimate fallback: analyze a competitor from a user-provided URL or pasted content."""
+    comp = await db.competitors.find_one({"id": comp_id, "user_id": user["id"]})
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    our = await db.company.find_one({"user_id": user["id"]}) or {}
+    if body.url and not (body.text and body.text.strip()):
+        result = await crawler.acquire(body.url, comp.get("company_name", ""))
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("message") or "Could not collect data from that URL.")
+    elif body.text and body.text.strip():
+        result = crawler.from_user_text(body.text, comp.get("company_name", ""), body.url or comp.get("website", ""))
+    else:
+        raise HTTPException(status_code=400, detail="Provide page content or a specific URL.")
+    meta = collection_meta(result)
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        analysis = await ai_json(ANALYZE_SYSTEM, analyze_prompt(comp, result, our))
+    except Exception as e:
+        logger.error(f"manual analyze AI error: {e}")
+        raise HTTPException(status_code=502, detail="AI analysis failed. Please retry.")
+    analysis["collected_at"] = now
+    await db.competitors.update_one(
+        {"id": comp_id},
+        {"$set": {"analysis": analysis, "status": "Analyzed", "is_demo": False,
+                  "data_collection": meta, "last_analyzed": now}},
     )
     return clean(await db.competitors.find_one({"id": comp_id}))
 
@@ -591,13 +647,18 @@ async def run_analysis(body: AnalysisRunBody, user: dict = Depends(get_current_u
     comp_blocks, errors = [], []
     for comp in competitors:
         try:
-            scraped = scrape_website(comp.get("website", ""))
-            if not scraped["ok"]:
-                errors.append({"competitor": comp.get("company_name"), "reason": "Could not retrieve website data."})
+            result = await crawler.acquire(comp.get("website", ""), comp.get("company_name", ""),
+                                           use_browser=False, max_pages=3, max_runtime=25, max_requests=5)
+            meta = collection_meta(result)
+            await db.competitors.update_one({"id": comp.get("id")}, {"$set": {"data_collection": meta}})
+            if not result["ok"]:
+                errors.append({"competitor": comp.get("company_name"),
+                               "reason": result.get("message") or "Could not collect public data.",
+                               "status": result.get("overall_status")})
                 continue
             extracted = await ai_json(
                 prompts.competitor_system(),
-                prompts.competitor_prompt(our_block.get("classification", {}), comp, scraped.get("text", "")),
+                prompts.competitor_prompt(our_block.get("classification", {}), comp, result.get("text", "")),
             )
             comp_blocks.append(assemble.build_competitor_block(our_block, comp, extracted, mode=mode))
         except Exception as e:
