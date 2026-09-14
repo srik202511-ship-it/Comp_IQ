@@ -410,6 +410,7 @@ async def update_company(body: CompanyBody, user: dict = Depends(get_current_use
 
 class CompanyAnalyzeBody(BaseModel):
     website: str
+    reset: bool = False
 
 
 @api_router.post("/company/analyze")
@@ -433,6 +434,13 @@ async def analyze_company(body: CompanyAnalyzeBody, user: dict = Depends(get_cur
     # Clear demo dataset so the user only sees their own product going forward
     await db.competitors.delete_many({"user_id": user["id"], "is_demo": True})
     await db.insights.delete_many({"user_id": user["id"], "is_demo": True})
+    if body.reset:
+        # Fresh setup (from the setup wizard): wipe ALL prior competitors, insights,
+        # CI analyses and history so this becomes a brand-new comparison.
+        await db.competitors.delete_many({"user_id": user["id"]})
+        await db.insights.delete_many({"user_id": user["id"]})
+        await db.ci_analyses.delete_many({"user_id": user["id"]})
+        await db.ci_history.delete_many({"user_id": user["id"]})
     return clean(await db.company.find_one({"user_id": user["id"]}))
 
 

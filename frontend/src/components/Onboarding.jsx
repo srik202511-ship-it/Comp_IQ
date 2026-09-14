@@ -39,9 +39,9 @@ export default function Onboarding({ onClose }) {
     setBusy(true);
     const t = toast.loading("Crawling your site & building your product profile…");
     try {
-      await api.post("/company/analyze", { website: website.trim() });
+      await api.post("/company/analyze", { website: website.trim(), reset: true });
       await refresh();
-      toast.success("Your product profile is ready — demo data cleared", { id: t });
+      toast.success("Your product profile is ready — starting a fresh comparison", { id: t });
       setStep(2);
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail), { id: t });
@@ -153,7 +153,7 @@ export default function Onboarding({ onClose }) {
 
           {step === 1 && (
             <div data-testid="onboarding-product">
-              <StepHead Icon={Sparkles} title="Analyze your website" subtitle="AI reads your site and builds your product profile automatically. This clears the demo data." />
+              <StepHead Icon={Sparkles} title="Analyze your website" subtitle="AI reads your site and builds your product profile automatically. This starts a fresh comparison (any previous competitors and history are cleared)." />
               <label className="block text-slate-300 text-xs font-medium mb-1.5 mt-6">Your product website</label>
               <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://yourcompany.com" data-testid="onboarding-website"
                 className="w-full bg-[#0B0F17] border border-[#1f2937] focus:border-blue-500/60 rounded-xl px-4 py-3 text-slate-100 text-sm outline-none placeholder:text-slate-600" />

@@ -105,6 +105,20 @@
 user_problem_statement: "User cannot log in with the demo credentials (demo@competeiq.ai / demo1234)."
 
 backend:
+  - task: "Fresh comparison reset (POST /api/company/analyze with reset=true wipes all prior data)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added reset field to CompanyAnalyzeBody (default false). When reset=true, the endpoint wipes ALL prior records (competitors, insights, ci_analyses, ci_history) for a fresh start. When reset=false/omitted, keeps previous behavior (only clears demo records). This enables the setup wizard to create a brand-new comparison."
+        -working: true
+        -agent: "testing"
+        -comment: "ALL TESTS PASSED ✅. Comprehensive testing of fresh comparison reset feature completed successfully. (1) BASELINE: Confirmed demo data exists - 1 competitor, analysis report, 5 history snapshots ✅. (2) RESET RUN: POST /api/company/analyze with {\"website\": \"https://www.postman.com\", \"reset\": true} completed in 7.2s, returned HTTP 200 with new company profile (Postman API Platform, is_demo=false) ✅. (3) VERIFY FRESH: After reset=true, ALL prior data wiped successfully - competitors count: 0 (EMPTY) ✅, history count: 0 (EMPTY) ✅, analysis: null/empty ✅, company reflects Postman (not NimbusIQ) ✅. (4) NON-RESET REGRESSION: POST /api/reset-demo restored demo data, then POST /api/company/analyze WITHOUT reset field (defaults to false) completed in 6.3s, returned HTTP 200, updated company to Postman, did NOT force-wipe everything ✅. Reset behavior working correctly: reset=true wipes ALL records, reset=false/omitted only clears demo records. No critical issues found. All requirements met."
   - task: "Saved Comparisons history (/api/analysis/history + snapshot on each run + demo backdated snapshots)"
     implemented: true
     working: true
@@ -151,7 +165,7 @@ backend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 7
+  test_sequence: 8
   run_ui: false
 
 frontend:
@@ -202,6 +216,8 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+    -agent: "testing"
+    -message: "✅ FRESH COMPARISON RESET FEATURE TESTING COMPLETE. All 4 test scenarios passed successfully: (1) BASELINE: Demo data exists (1 competitor, analysis report, 5 history snapshots) ✅. (2) RESET RUN: POST /api/company/analyze with reset=true completed in 7.2s, returned HTTP 200 with new Postman company profile (is_demo=false) ✅. (3) VERIFY FRESH: After reset=true, ALL prior data wiped - competitors: 0 (EMPTY), history: 0 (EMPTY), analysis: null/empty, company reflects Postman (not NimbusIQ) ✅. (4) NON-RESET REGRESSION: reset-demo restored data, then POST /api/company/analyze WITHOUT reset field completed in 6.3s, returned HTTP 200, did NOT force-wipe ✅. Reset behavior verified: reset=true wipes ALL records (competitors, insights, ci_analyses, ci_history), reset=false/omitted only clears demo records. No critical issues found. All requirements met. Ready for main agent to summarize and finish."
     -agent: "main"
     -message: "Test the new Apples-to-Apples CI engine. Login as demo@competeiq.ai / demo1234 first (this reseeds demo data incl. the CI report). PRIMARY TESTS: (1) GET /api/analysis returns a report with our_product.competitive_score, a competitors[] array where Datadog/Dynatrace/New Relic have comparability.is_comparable=true and a numeric competitive_score.score, and HubSpot has comparability.is_comparable=false, competitive_score=null, and a competitive_not_calculated_reason. Confirm the report has matrix, radar (dimensions must NOT include Comparability), value_for_money, ranking, insights (defend/close_the_gap/differentiate/investigate), and disclaimer. (2) SCORE INDEPENDENCE is guaranteed in code (comparability is not an input to competitive) — verify structurally that competitive_score.dimensions has 7 keys none of which is comparability. (3) POST /api/analysis/run with body {\"competitor_ids\": [<the Datadog competitor id from GET /api/competitors>]} — this does a LIVE scrape of datadoghq.com + GPT-5.4; allow up to 90s; expect 200 with a report containing Datadog block with comparability + competitive_score. Only test ONE competitor to keep it fast. (4) Regression: GET /api/company, /api/competitors (now 4 incl HubSpot), /api/insights still work; POST /api/reset-demo works and repopulates ci_analyses. Do NOT change any code."
     -agent: "testing"
